@@ -4,21 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Supplier extends Model
+class Branch extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'branch_id',
+        'code',
         'name',
-        'contact_person',
-        'phone',
-        'email',
         'address',
-        'notes',
         'is_active',
     ];
 
@@ -29,13 +25,23 @@ class Supplier extends Model
         ];
     }
 
-    public function branch(): BelongsTo
+    public function suppliers(): HasMany
     {
-        return $this->belongsTo(Branch::class);
+        return $this->hasMany(Supplier::class);
+    }
+
+    public function locations(): HasMany
+    {
+        return $this->hasMany(Location::class);
     }
 
     public function partStocks(): HasMany
     {
         return $this->hasMany(PartStock::class);
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class);
     }
 }

@@ -28,7 +28,7 @@ class StockLedger extends Model
      * Ledger entries are append-only: never update or delete a row after it is written.
      */
     protected $fillable = [
-        'part_id',
+        'part_stock_id',
         'type',
         'quantity_change',
         'balance_after',
@@ -48,9 +48,9 @@ class StockLedger extends Model
         ];
     }
 
-    public function part(): BelongsTo
+    public function partStock(): BelongsTo
     {
-        return $this->belongsTo(Part::class);
+        return $this->belongsTo(PartStock::class);
     }
 
     public function user(): BelongsTo

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Location extends Model
@@ -11,6 +12,7 @@ class Location extends Model
     use HasFactory;
 
     protected $fillable = [
+        'branch_id',
         'code',
         'rack',
         'bin',
@@ -25,8 +27,13 @@ class Location extends Model
         ];
     }
 
-    public function parts(): HasMany
+    public function branch(): BelongsTo
     {
-        return $this->hasMany(Part::class);
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function partStocks(): HasMany
+    {
+        return $this->hasMany(PartStock::class);
     }
 }

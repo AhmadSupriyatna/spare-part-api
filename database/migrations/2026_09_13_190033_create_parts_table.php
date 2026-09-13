@@ -11,12 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('locations', function (Blueprint $table) {
+        Schema::create('parts', function (Blueprint $table) {
             $table->id();
-            $table->string('code')->unique();
-            $table->string('rack');
-            $table->string('bin');
+            $table->string('sku')->unique();
+            $table->string('name');
             $table->text('description')->nullable();
+            $table->string('unit')->default('pcs');
+            $table->string('category')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
@@ -27,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('locations');
+        Schema::dropIfExists('parts');
     }
 };

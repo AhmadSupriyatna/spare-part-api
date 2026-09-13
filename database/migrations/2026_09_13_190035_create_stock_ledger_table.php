@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('stock_ledger', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('part_id')->constrained('parts')->cascadeOnDelete();
+            $table->foreignId('part_stock_id')->constrained('part_stocks')->cascadeOnDelete();
             $table->string('type');
             $table->integer('quantity_change');
             $table->integer('balance_after');
@@ -23,7 +23,7 @@ return new class extends Migration
             $table->timestamp('occurred_at')->useCurrent();
             $table->timestamps();
 
-            $table->index(['part_id', 'occurred_at']);
+            $table->index(['part_stock_id', 'occurred_at']);
         });
     }
 
