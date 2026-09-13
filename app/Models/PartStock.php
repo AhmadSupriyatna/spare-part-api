@@ -59,6 +59,16 @@ class PartStock extends Model
         return $this->hasMany(StockLedger::class);
     }
 
+    public function alerts(): HasMany
+    {
+        return $this->hasMany(StockAlert::class);
+    }
+
+    public function reorderRequests(): HasMany
+    {
+        return $this->hasMany(ReorderRequest::class);
+    }
+
     public function isBelowReorderPoint(): bool
     {
         return $this->quantity_on_hand <= $this->reorder_point;

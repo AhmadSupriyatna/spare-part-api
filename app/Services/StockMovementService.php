@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\DB;
  */
 class StockMovementService
 {
+    public function __construct(private readonly StockAlertService $alerts) {}
+
     /**
      * @param  int  $quantityChange  Positive to add stock, negative to remove it.
      *
@@ -42,7 +44,7 @@ class StockMovementService
 
             $locked->update(['quantity_on_hand' => $newBalance]);
 
-            return StockLedger::create([
+            $ledgerEntry = StockLedger::create([
                 'part_stock_id' => $locked->id,
                 'type' => $type,
                 'quantity_change' => $quantityChange,
@@ -53,6 +55,10 @@ class StockMovementService
                 'user_id' => $user?->id,
                 'occurred_at' => now(),
             ]);
+
+            $this->alerts->evaluate($locked);
+
+            return $ledgerEntry;
         });
     }
 }
