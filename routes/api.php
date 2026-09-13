@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\StockAlertController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkOrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -94,6 +95,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/equipment/{equipment}/tasks', [TaskController::class, 'store']);
         Route::put('/tasks/{task}', [TaskController::class, 'update']);
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+
+        Route::get('/users', [UserController::class, 'index']);
 
         Route::post('/reorder-requests/{reorderRequest}/approve', [ReorderRequestController::class, 'approve']);
         Route::post('/reorder-requests/{reorderRequest}/mark-ordered', [ReorderRequestController::class, 'markOrdered']);
