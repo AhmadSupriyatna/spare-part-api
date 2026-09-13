@@ -13,11 +13,13 @@ return new class extends Migration
     {
         Schema::create('parts', function (Blueprint $table) {
             $table->id();
-            $table->string('sku')->unique();
+            $table->string('item_master_no')->unique();
             $table->string('name');
             $table->text('description')->nullable();
             $table->string('unit')->default('pcs');
             $table->string('category')->nullable();
+            $table->decimal('price', 12, 2)->default(0);
+            $table->string('image_path')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

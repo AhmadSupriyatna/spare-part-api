@@ -23,11 +23,13 @@ class StorePartRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'sku' => ['required', 'string', 'max:100', 'unique:parts,sku'],
+            'item_master_no' => ['required', 'string', 'max:100', 'unique:parts,item_master_no'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'unit' => ['required', 'string', 'max:50'],
             'category' => ['nullable', 'string', 'max:100'],
+            'price' => ['sometimes', 'numeric', 'min:0'],
+            'image' => ['nullable', 'image', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

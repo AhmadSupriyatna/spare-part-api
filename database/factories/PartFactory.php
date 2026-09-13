@@ -46,11 +46,12 @@ class PartFactory extends Factory
         $item = $this->faker->unique()->randomElement(self::$catalog);
 
         return [
-            'sku' => strtoupper('SP-'.$this->faker->unique()->bothify('####')),
+            'item_master_no' => strtoupper('SP-'.$this->faker->unique()->bothify('####')),
             'name' => $item['name'],
             'description' => null,
             'unit' => $item['unit'],
             'category' => $item['category'],
+            'price' => $this->faker->randomFloat(2, 10000, 750000),
             'is_active' => true,
         ];
     }

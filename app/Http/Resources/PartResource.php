@@ -17,11 +17,13 @@ class PartResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'sku' => $this->sku,
+            'item_master_no' => $this->item_master_no,
             'name' => $this->name,
             'description' => $this->description,
             'unit' => $this->unit,
             'category' => $this->category,
+            'price' => $this->price,
+            'image_url' => $this->imageUrl(),
             'is_active' => $this->is_active,
             'stocks' => PartStockResource::collection($this->whenLoaded('stocks')),
             'created_at' => $this->created_at,
