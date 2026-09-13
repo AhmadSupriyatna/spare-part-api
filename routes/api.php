@@ -2,10 +2,15 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
+use App\Http\Controllers\Api\EquipmentController;
+use App\Http\Controllers\Api\LineController;
 use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\MachineController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\PartStockController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\WorkOrderController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
@@ -27,6 +32,28 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/part-stocks/{partStock}', [PartStockController::class, 'show']);
     Route::get('/part-stocks/{partStock}/ledger', [PartStockController::class, 'ledger']);
 
+    // Line > Machine > Equipment hierarchy: any authenticated role can read.
+    Route::get('/branches/{branch}/lines', [LineController::class, 'index']);
+    Route::get('/lines/{line}', [LineController::class, 'show']);
+    Route::get('/lines/{line}/machines', [MachineController::class, 'index']);
+    Route::get('/machines/{machine}', [MachineController::class, 'show']);
+    Route::get('/machines/{machine}/equipment', [EquipmentController::class, 'index']);
+    Route::get('/equipment/{equipment}', [EquipmentController::class, 'show']);
+
+    // Work orders (maintenance schedule templates) and tasks (actual work items):
+    // any authenticated role can read.
+    Route::get('/equipment/{equipment}/work-orders', [WorkOrderController::class, 'index']);
+    Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show']);
+    Route::get('/equipment/{equipment}/tasks', [TaskController::class, 'index']);
+    Route::get('/tasks/mine', [TaskController::class, 'mine']);
+    Route::get('/tasks/{task}', [TaskController::class, 'show']);
+
+    // Any authenticated role can work their own tasks and log machine runtime.
+    Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
+    Route::post('/tasks/{task}/complete', [TaskController::class, 'complete']);
+    Route::post('/tasks/{task}/cancel', [TaskController::class, 'cancel']);
+    Route::post('/machines/{machine}/runtime', [MachineController::class, 'addRuntime']);
+
     // Master data: only warehouse admin, supervisor, and superadmin can write.
     Route::middleware('role:admin_gudang|supervisor|superadmin')->group(function () {
         Route::apiResource('branches', BranchController::class)->only(['store', 'update', 'destroy']);
@@ -41,5 +68,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/part-stocks/{partStock}/receive', [PartStockController::class, 'receive']);
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])
             ->middleware('throttle:stock-adjustment');
+
+        Route::post('/branches/{branch}/lines', [LineController::class, 'store']);
+        Route::put('/lines/{line}', [LineController::class, 'update']);
+        Route::delete('/lines/{line}', [LineController::class, 'destroy']);
+        Route::post('/lines/{line}/machines', [MachineController::class, 'store']);
+        Route::put('/machines/{machine}', [MachineController::class, 'update']);
+        Route::delete('/machines/{machine}', [MachineController::class, 'destroy']);
+        Route::post('/machines/{machine}/equipment', [EquipmentController::class, 'store']);
+        Route::put('/equipment/{equipment}', [EquipmentController::class, 'update']);
+        Route::delete('/equipment/{equipment}', [EquipmentController::class, 'destroy']);
+
+        Route::post('/equipment/{equipment}/work-orders', [WorkOrderController::class, 'store']);
+        Route::put('/work-orders/{workOrder}', [WorkOrderController::class, 'update']);
+        Route::delete('/work-orders/{workOrder}', [WorkOrderController::class, 'destroy']);
+        Route::post('/work-orders/{workOrder}/generate-task', [WorkOrderController::class, 'generateTask']);
+
+        Route::post('/equipment/{equipment}/tasks', [TaskController::class, 'store']);
+        Route::put('/tasks/{task}', [TaskController::class, 'update']);
+        Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
     });
 });

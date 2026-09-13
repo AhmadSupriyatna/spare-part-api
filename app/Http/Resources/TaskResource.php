@@ -1,0 +1,39 @@
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/**
+ * @mixin \App\Models\Task
+ */
+class TaskResource extends JsonResource
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'work_order_id' => $this->work_order_id,
+            'equipment_id' => $this->equipment_id,
+            'assigned_to' => $this->assigned_to,
+            'assignee_name' => $this->whenLoaded('assignee', fn () => $this->assignee?->name),
+            'title' => $this->title,
+            'description' => $this->description,
+            'status' => $this->status,
+            'cause' => $this->cause,
+            'due_date' => $this->due_date,
+            'due_runtime_hours' => $this->due_runtime_hours,
+            'started_at' => $this->started_at,
+            'completed_at' => $this->completed_at,
+            'completion_notes' => $this->completion_notes,
+            'part_stock_id' => $this->part_stock_id,
+            'quantity_used' => $this->quantity_used,
+            'is_overdue' => $this->isOverdue(),
+            'created_at' => $this->created_at,
+        ];
+    }
+}

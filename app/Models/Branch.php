@@ -40,6 +40,11 @@ class Branch extends Model
         return $this->hasMany(PartStock::class);
     }
 
+    public function lines(): HasMany
+    {
+        return $this->hasMany(ProductionLine::class, 'branch_id');
+    }
+
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class);
