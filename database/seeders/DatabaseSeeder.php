@@ -18,18 +18,13 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RoleSeeder::class);
-
-        $branch = Branch::create([
-            'code' => 'PUSAT',
-            'name' => 'Cabang Pusat',
-            'is_active' => true,
-        ]);
+        $this->call(DemoDataSeeder::class);
 
         $superadmin = User::factory()->create([
             'name' => 'Superadmin',
             'email' => 'superadmin@spareparts.test',
         ]);
         $superadmin->assignRole(UserRole::Superadmin->value);
-        $superadmin->branches()->attach($branch);
+        $superadmin->branches()->attach(Branch::all());
     }
 }

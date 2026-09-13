@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
+use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,11 +51,25 @@ class AuthController extends Controller
 
     private function transformUser(User $user): array
     {
+        $hasAllBranchAccess = $user->hasAnyRole([
+            UserRole::Superadmin->value,
+            UserRole::Supervisor->value,
+        ]);
+
+        $branches = $hasAllBranchAccess
+            ? Branch::where('is_active', true)->get()
+            : $user->branches;
+
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'roles' => $user->getRoleNames(),
+            'branches' => $branches->map(fn (Branch $branch) => [
+                'id' => $branch->id,
+                'code' => $branch->code,
+                'name' => $branch->name,
+            ])->values(),
         ];
     }
 }
