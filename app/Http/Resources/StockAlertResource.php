@@ -19,7 +19,7 @@ class StockAlertResource extends JsonResource
             'id' => $this->id,
             'part_stock_id' => $this->part_stock_id,
             'part_name' => $this->whenLoaded('partStock', fn () => $this->partStock->part?->name),
-            'part_sku' => $this->whenLoaded('partStock', fn () => $this->partStock->part?->sku),
+            'item_master_no' => $this->whenLoaded('partStock', fn () => $this->partStock->part?->item_master_no),
             'level' => $this->level,
             'quantity_on_hand_at_trigger' => $this->quantity_on_hand_at_trigger,
             'is_resolved' => $this->is_resolved,

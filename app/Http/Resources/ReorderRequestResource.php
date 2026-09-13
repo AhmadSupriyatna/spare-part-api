@@ -19,7 +19,7 @@ class ReorderRequestResource extends JsonResource
             'id' => $this->id,
             'part_stock_id' => $this->part_stock_id,
             'part_name' => $this->whenLoaded('partStock', fn () => $this->partStock->part?->name),
-            'part_sku' => $this->whenLoaded('partStock', fn () => $this->partStock->part?->sku),
+            'item_master_no' => $this->whenLoaded('partStock', fn () => $this->partStock->part?->item_master_no),
             'supplier_id' => $this->supplier_id,
             'supplier_name' => $this->whenLoaded('supplier', fn () => $this->supplier?->name),
             'quantity_requested' => $this->quantity_requested,
