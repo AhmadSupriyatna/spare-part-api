@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\InsufficientStockException;
 use App\Exceptions\PartStockNotFoundException;
+use App\Exceptions\ReplacementRequestAlreadyReviewedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReviewReplacementRequestRequest;
 use App\Http\Resources\PartReplacementRequestResource;
@@ -41,25 +43,31 @@ class PartReplacementRequestController extends Controller
                 $request->user(),
                 $request->validated()['notes'] ?? null,
             );
-        } catch (PartStockNotFoundException $e) {
+        } catch (PartStockNotFoundException|InsufficientStockException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
+        } catch (ReplacementRequestAlreadyReviewedException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         }
 
         return new PartReplacementRequestResource(
-            $partReplacementRequest->load(['part', 'equipment.machine.line.branch', 'reviewedBy'])
+            $partReplacementRequest->refresh()->load(['part', 'equipment.machine.line.branch', 'reviewedBy'])
         );
     }
 
-    public function reject(ReviewReplacementRequestRequest $request, PartReplacementRequest $partReplacementRequest): PartReplacementRequestResource
+    public function reject(ReviewReplacementRequestRequest $request, PartReplacementRequest $partReplacementRequest): JsonResponse|PartReplacementRequestResource
     {
-        $this->replacements->reject(
-            $partReplacementRequest,
-            $request->user(),
-            $request->validated()['notes'] ?? null,
-        );
+        try {
+            $this->replacements->reject(
+                $partReplacementRequest,
+                $request->user(),
+                $request->validated()['notes'] ?? null,
+            );
+        } catch (ReplacementRequestAlreadyReviewedException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
 
         return new PartReplacementRequestResource(
-            $partReplacementRequest->load(['part', 'equipment.machine.line.branch', 'reviewedBy'])
+            $partReplacementRequest->refresh()->load(['part', 'equipment.machine.line.branch', 'reviewedBy'])
         );
     }
 }
