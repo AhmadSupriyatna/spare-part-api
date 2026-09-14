@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\PartUnitAlreadyInstalledException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ScheduleLifetimeReplacementRequest;
 use App\Http\Requests\StorePartInstallationRequest;
@@ -11,17 +12,18 @@ use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Part;
 use App\Models\PartInstallation;
+use App\Services\PartLifecycleService;
 use App\Services\PartLifetimeService;
 use App\Services\PmSchedulingService;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 
 class PartInstallationController extends Controller
 {
     public function __construct(
         private readonly PartLifetimeService $lifetime,
         private readonly PmSchedulingService $scheduling,
+        private readonly PartLifecycleService $lifecycle,
     ) {}
 
     /**
@@ -59,7 +61,7 @@ class PartInstallationController extends Controller
     {
         return PartInstallationResource::collection(
             $equipment->partInstallations()
-                ->with(['part', 'installedBy'])
+                ->with(['part', 'partUnit', 'installedBy'])
                 ->orderByDesc('installed_at')
                 ->get()
         );
@@ -72,50 +74,34 @@ class PartInstallationController extends Controller
     {
         return PartInstallationResource::collection(
             $part->installations()
-                ->with(['equipment.machine.line', 'installedBy'])
+                ->with(['equipment.machine.line', 'partUnit', 'installedBy'])
                 ->orderByDesc('installed_at')
                 ->get()
         );
     }
 
     /**
-     * Install a part onto an equipment. If that part is already actively
-     * installed there, the old installation is auto-closed (treated as
-     * replaced) rather than allowing two active rows for the same pair.
+     * Install a part onto an equipment — either a brand-new unit (no
+     * part_unit_id given) or an existing repaired one being put back into
+     * service. Multiple simultaneous units of the same part can be active
+     * on one equipment at once; nothing here auto-closes another
+     * installation just for sharing the same part_id.
      */
-    public function store(StorePartInstallationRequest $request, Equipment $equipment): PartInstallationResource
+    public function store(StorePartInstallationRequest $request, Equipment $equipment): PartInstallationResource|JsonResponse
     {
-        $data = $request->validated();
-        $currentRuntimeHours = $equipment->machine->line->runtime_hours;
+        try {
+            $installation = $this->lifecycle->install($equipment, $request->validated(), $request->user());
+        } catch (PartUnitAlreadyInstalledException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
-        $installation = DB::transaction(function () use ($equipment, $request, $data, $currentRuntimeHours) {
-            $equipment->partInstallations()
-                ->where('part_id', $data['part_id'])
-                ->whereNull('removed_at')
-                ->update([
-                    'removed_at' => now(),
-                    'removed_at_runtime_hours' => $currentRuntimeHours,
-                ]);
-
-            return $equipment->partInstallations()->create([
-                'part_id' => $data['part_id'],
-                'installed_at' => $data['installed_at'] ?? now(),
-                'installed_at_runtime_hours' => $currentRuntimeHours,
-                'installed_by' => $request->user()->id,
-                'notes' => $data['notes'] ?? null,
-            ]);
-        });
-
-        return new PartInstallationResource($installation->load(['part', 'installedBy']));
+        return new PartInstallationResource($installation->load(['part', 'partUnit', 'installedBy']));
     }
 
-    public function remove(Request $request, PartInstallation $partInstallation): PartInstallationResource
+    public function remove(PartInstallation $partInstallation): PartInstallationResource
     {
-        $partInstallation->update([
-            'removed_at' => now(),
-            'removed_at_runtime_hours' => $partInstallation->equipment->machine->line->runtime_hours,
-        ]);
+        $installation = $this->lifecycle->remove($partInstallation);
 
-        return new PartInstallationResource($partInstallation->load(['part', 'installedBy']));
+        return new PartInstallationResource($installation->load(['part', 'partUnit', 'installedBy']));
     }
 }

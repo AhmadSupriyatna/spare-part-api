@@ -10,6 +10,7 @@ class PartInstallation extends Model
     protected $fillable = [
         'equipment_id',
         'part_id',
+        'part_unit_id',
         'installed_at',
         'installed_at_runtime_hours',
         'removed_at',
@@ -36,6 +37,11 @@ class PartInstallation extends Model
     public function part(): BelongsTo
     {
         return $this->belongsTo(Part::class);
+    }
+
+    public function partUnit(): BelongsTo
+    {
+        return $this->belongsTo(PartUnit::class);
     }
 
     public function installedBy(): BelongsTo
@@ -68,8 +74,9 @@ class PartInstallation extends Model
     }
 
     /**
-     * The recurring work order (if any) that governs this part's expected
-     * lifespan on this equipment, used to compute a "% worn" indicator.
+     * A recurring work order (if any) covering this equipment+part pair —
+     * kept for the WorkOrder-driven auto-recurring PM flow, but no longer
+     * what remaining lifetime is computed from (see percentUsed()).
      */
     public function relevantWorkOrder(): ?WorkOrder
     {
@@ -81,28 +88,14 @@ class PartInstallation extends Model
     }
 
     /**
-     * How worn this installation is, as a percentage of its governing work
-     * order's expected calendar or runtime-hour interval — null if there's
-     * no work order to compare against (nothing defines "how long should
-     * this part last" for that equipment+part pair yet).
+     * How worn this installation's unit is overall, as a percentage of the
+     * part's estimated lifetime — delegates to PartUnit, which accumulates
+     * runtime hours across every installation cycle the unit has had, not
+     * just this one. Null if the unit has no estimated_lifetime_hours to
+     * compare against.
      */
     public function percentUsed(): ?int
     {
-        $workOrder = $this->relevantWorkOrder();
-
-        if (! $workOrder) {
-            return null;
-        }
-
-        if ($workOrder->interval_days) {
-            return min(100, (int) round(($this->ageInDays() / $workOrder->interval_days) * 100));
-        }
-
-        $ageInRuntimeHours = $this->ageInRuntimeHours();
-        if ($workOrder->interval_hours && $ageInRuntimeHours !== null) {
-            return min(100, (int) round(($ageInRuntimeHours / $workOrder->interval_hours) * 100));
-        }
-
-        return null;
+        return $this->partUnit?->percentUsed();
     }
 }

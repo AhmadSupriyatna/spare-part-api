@@ -22,7 +22,13 @@ class PartLifetimeService
         return PartInstallation::query()
             ->whereNull('removed_at')
             ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branchId))
-            ->with(['part', 'equipment.machine.line', 'installedBy'])
+            ->with([
+                'part',
+                'equipment.machine.line',
+                'installedBy',
+                'partUnit.part',
+                'partUnit.installations.equipment.machine.line',
+            ])
             ->get()
             ->filter(fn (PartInstallation $installation) => ($installation->percentUsed() ?? 0) >= self::AT_RISK_THRESHOLD_PERCENT)
             ->sortByDesc(fn (PartInstallation $installation) => $installation->percentUsed())

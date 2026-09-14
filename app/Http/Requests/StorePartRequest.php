@@ -29,6 +29,7 @@ class StorePartRequest extends FormRequest
             'unit' => ['required', 'string', 'max:50', 'exists:units,name'],
             'category' => ['nullable', 'string', 'max:100'],
             'price' => ['sometimes', 'numeric', 'min:0'],
+            'estimated_lifetime_hours' => ['nullable', 'integer', 'min:1'],
             'image' => ['nullable', 'image', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
         ];

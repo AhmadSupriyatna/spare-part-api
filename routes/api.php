@@ -10,9 +10,11 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MachineController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\PartInstallationController;
+use App\Http\Controllers\Api\PartRepairController;
 use App\Http\Controllers\Api\PartStockController;
 use App\Http\Controllers\Api\PartReplacementRequestController;
 use App\Http\Controllers\Api\PartSupplierController;
+use App\Http\Controllers\Api\PartUnitController;
 use App\Http\Controllers\Api\PublicBreakdownController;
 use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\StockAlertController;
@@ -101,6 +103,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/parts/{part}/part-installations', [PartInstallationController::class, 'forPart']);
     Route::get('/locations/{location}/part-stocks', [PartStockController::class, 'forLocation']);
 
+    // Part units: one row per physical, trackable part instance — its
+    // install/repair history across equipment and repair cycles.
+    Route::get('/parts/{part}/units', [PartUnitController::class, 'index']);
+    Route::get('/part-units/{partUnit}', [PartUnitController::class, 'show']);
+
     // Any authenticated role can work their own tasks and log line runtime.
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
     Route::post('/tasks/{task}/complete', [TaskController::class, 'complete']);
@@ -172,6 +179,9 @@ Route::middleware('auth:sanctum')->group(function () {
             '/part-installations/{partInstallation}/schedule-replacement',
             [PartInstallationController::class, 'scheduleReplacement']
         );
+
+        Route::post('/part-units/{partUnit}/repairs', [PartRepairController::class, 'store']);
+        Route::put('/part-repairs/{partRepair}', [PartRepairController::class, 'update']);
     });
 
     // Breakdown replacement approval board: Engineer/Teknisi decide whether a

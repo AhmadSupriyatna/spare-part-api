@@ -18,6 +18,7 @@ class Part extends Model
         'unit',
         'category',
         'price',
+        'estimated_lifetime_hours',
         'image_path',
         'is_active',
     ];
@@ -26,6 +27,7 @@ class Part extends Model
     {
         return [
             'price' => 'decimal:2',
+            'estimated_lifetime_hours' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -48,6 +50,11 @@ class Part extends Model
     public function installations(): HasMany
     {
         return $this->hasMany(PartInstallation::class);
+    }
+
+    public function units(): HasMany
+    {
+        return $this->hasMany(PartUnit::class);
     }
 
     public function workOrders(): HasMany
