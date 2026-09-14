@@ -60,6 +60,24 @@ class PublicBreakdownController extends Controller
         );
     }
 
+    /**
+     * The whole point of printing a QR per branch: scanning it should only
+     * ever offer the equipment that (a) actually uses this part per its BOM
+     * and (b) lives in the branch the QR was printed for — never the full
+     * factory hierarchy.
+     */
+    public function equipmentForPartInBranch(Part $part, Branch $branch): AnonymousResourceCollection
+    {
+        $equipment = $part->equipmentParts()
+            ->with('equipment.machine.line')
+            ->get()
+            ->pluck('equipment')
+            ->filter(fn (?Equipment $eq) => $eq && $eq->is_active && $eq->machine->line->branch_id === $branch->id)
+            ->values();
+
+        return EquipmentResource::collection($equipment);
+    }
+
     public function store(StoreReplacementRequestRequest $request): JsonResponse
     {
         $replacementRequest = PartReplacementRequest::create([

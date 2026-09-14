@@ -32,6 +32,7 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
     Route::get('/branches/{branch}/lines', [PublicBreakdownController::class, 'lines']);
     Route::get('/lines/{line}/machines', [PublicBreakdownController::class, 'machines']);
     Route::get('/machines/{machine}/equipment', [PublicBreakdownController::class, 'equipment']);
+    Route::get('/parts/{part}/branches/{branch}/equipment', [PublicBreakdownController::class, 'equipmentForPartInBranch']);
     Route::post('/replacement-requests', [PublicBreakdownController::class, 'store']);
 });
 
