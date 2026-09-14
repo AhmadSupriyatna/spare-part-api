@@ -10,7 +10,9 @@ use App\Http\Controllers\Api\MachineController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\PartInstallationController;
 use App\Http\Controllers\Api\PartStockController;
+use App\Http\Controllers\Api\PartReplacementRequestController;
 use App\Http\Controllers\Api\PartSupplierController;
+use App\Http\Controllers\Api\PublicBreakdownController;
 use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\StockAlertController;
 use App\Http\Controllers\Api\SupplierController;
@@ -20,6 +22,18 @@ use App\Http\Controllers\Api\WorkOrderController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
+
+// Unauthenticated breakdown QR-scan flow: read-only lookups plus submitting a
+// replacement request. Nothing here touches stock or installations — that
+// only happens once an Engineer/Teknisi approves the request (see below).
+Route::middleware('throttle:breakdown-public')->prefix('public')->group(function () {
+    Route::get('/parts/{part}', [PublicBreakdownController::class, 'showPart']);
+    Route::get('/branches', [PublicBreakdownController::class, 'branches']);
+    Route::get('/branches/{branch}/lines', [PublicBreakdownController::class, 'lines']);
+    Route::get('/lines/{line}/machines', [PublicBreakdownController::class, 'machines']);
+    Route::get('/machines/{machine}/equipment', [PublicBreakdownController::class, 'equipment']);
+    Route::post('/replacement-requests', [PublicBreakdownController::class, 'store']);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -126,5 +140,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'store']);
         Route::post('/part-installations/{partInstallation}/remove', [PartInstallationController::class, 'remove']);
+    });
+
+    // Breakdown replacement approval board: Engineer/Teknisi decide whether a
+    // QR-scanned replacement request goes through; supervisor/superadmin get
+    // the same oversight access they have everywhere else in the app.
+    Route::middleware('role:teknisi|engineer|supervisor|superadmin')->group(function () {
+        Route::get('/branches/{branch}/replacement-requests', [PartReplacementRequestController::class, 'index']);
+        Route::post('/replacement-requests/{partReplacementRequest}/approve', [PartReplacementRequestController::class, 'approve']);
+        Route::post('/replacement-requests/{partReplacementRequest}/reject', [PartReplacementRequestController::class, 'reject']);
     });
 });

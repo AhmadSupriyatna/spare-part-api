@@ -50,4 +50,18 @@ class Equipment extends Model
     {
         return $this->hasMany(PartInstallation::class);
     }
+
+    public function replacementRequests(): HasMany
+    {
+        return $this->hasMany(PartReplacementRequest::class);
+    }
+
+    public function activeInstallation(?int $partId = null): ?PartInstallation
+    {
+        return $this->partInstallations()
+            ->when($partId, fn ($q) => $q->where('part_id', $partId))
+            ->whereNull('removed_at')
+            ->latest('installed_at')
+            ->first();
+    }
 }

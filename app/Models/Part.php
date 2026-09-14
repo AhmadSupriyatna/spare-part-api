@@ -55,6 +55,11 @@ class Part extends Model
         return $this->hasMany(WorkOrder::class);
     }
 
+    public function replacementRequests(): HasMany
+    {
+        return $this->hasMany(PartReplacementRequest::class);
+    }
+
     public function imageUrl(): ?string
     {
         return $this->image_path ? Storage::disk('public')->url($this->image_path) : null;

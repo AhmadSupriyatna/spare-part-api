@@ -28,5 +28,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('stock-adjustment', function ($request) {
             return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
         });
+
+        // Unauthenticated breakdown QR-scan flow — keyed by IP since there's
+        // no user to key on, generous enough for a real shop-floor burst of
+        // scans but not for scripted abuse.
+        RateLimiter::for('breakdown-public', function ($request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
     }
 }
