@@ -6,9 +6,11 @@ use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AdjustStockRequest;
 use App\Http\Requests\ReceiveStockRequest;
+use App\Http\Requests\UpdatePartStockLocationRequest;
 use App\Http\Resources\PartStockResource;
 use App\Http\Resources\StockLedgerResource;
 use App\Models\Branch;
+use App\Models\Location;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Services\StockMovementService;
@@ -82,6 +84,26 @@ class PartStockController extends Controller
     {
         return StockLedgerResource::collection(
             $partStock->ledgerEntries()->with('user')->latest('occurred_at')->paginate(25)
+        );
+    }
+
+    /**
+     * Assign (or move) this part's stock to a rack/bin location.
+     */
+    public function updateLocation(UpdatePartStockLocationRequest $request, PartStock $partStock): PartStockResource
+    {
+        $partStock->update($request->validated());
+
+        return new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location']));
+    }
+
+    /**
+     * Reverse lookup: which parts are currently stocked at this location.
+     */
+    public function forLocation(Location $location): AnonymousResourceCollection
+    {
+        return PartStockResource::collection(
+            $location->partStocks()->with('part')->get()
         );
     }
 }

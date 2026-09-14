@@ -8,6 +8,7 @@ use App\Http\Requests\UpdatePartSupplierRequest;
 use App\Http\Resources\PartSupplierResource;
 use App\Models\Part;
 use App\Models\PartSupplier;
+use App\Models\Supplier;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
@@ -53,5 +54,15 @@ class PartSupplierController extends Controller
         $partSupplier->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * Reverse lookup: which parts is this supplier approved to supply.
+     */
+    public function forSupplier(Supplier $supplier): AnonymousResourceCollection
+    {
+        return PartSupplierResource::collection(
+            $supplier->partSuppliers()->with('part')->orderBy('is_preferred', 'desc')->get()
+        );
     }
 }

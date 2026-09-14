@@ -63,9 +63,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Part <-> Supplier (approved supplier list per part) and Part <-> Equipment
     // (BOM) relations, plus part lifetime tracking: any authenticated role can read.
     Route::get('/parts/{part}/suppliers', [PartSupplierController::class, 'index']);
+    Route::get('/suppliers/{supplier}/parts', [PartSupplierController::class, 'forSupplier']);
     Route::get('/equipment/{equipment}/parts', [EquipmentPartController::class, 'index']);
     Route::get('/parts/{part}/equipment', [EquipmentPartController::class, 'forPart']);
     Route::get('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'index']);
+    Route::get('/locations/{location}/part-stocks', [PartStockController::class, 'forLocation']);
 
     // Any authenticated role can work their own tasks and log line runtime.
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
@@ -87,6 +89,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/part-stocks/{partStock}/receive', [PartStockController::class, 'receive']);
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])
             ->middleware('throttle:stock-adjustment');
+        Route::put('/part-stocks/{partStock}/location', [PartStockController::class, 'updateLocation']);
 
         Route::post('/branches/{branch}/lines', [LineController::class, 'store']);
         Route::put('/lines/{line}', [LineController::class, 'update']);

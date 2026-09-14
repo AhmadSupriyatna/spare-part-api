@@ -18,6 +18,8 @@ class PartSupplierResource extends JsonResource
         return [
             'id' => $this->id,
             'part_id' => $this->part_id,
+            'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
+            'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
             'supplier_id' => $this->supplier_id,
             'supplier_name' => $this->whenLoaded('supplier', fn () => $this->supplier?->name),
             'branch_id' => $this->whenLoaded('supplier', fn () => $this->supplier?->branch_id),
