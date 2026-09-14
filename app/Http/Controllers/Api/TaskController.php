@@ -23,13 +23,16 @@ class TaskController extends Controller
     public function __construct(private readonly TaskService $tasks) {}
 
     /**
-     * Every task ever scheduled from a Task Library, across the branch — the
-     * "WO Ledger" tab, and the same feed the PM calendar filters by date.
+     * Every PM task ever scheduled, across the branch — whether it came from
+     * a Task Library recipe or a lifetime-worn-part flag (both leave a
+     * task_part_checks row; that's what marks a task as "PM", not
+     * task_library_id specifically, since lifetime-sourced tasks don't have
+     * one). Feeds the "WO Ledger" tab and the PM calendar.
      */
     public function pmSchedule(Branch $branch): AnonymousResourceCollection
     {
         return TaskResource::collection(
-            Task::whereNotNull('task_library_id')
+            Task::whereHas('partChecks')
                 ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
                 ->with(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part'])
                 ->orderByDesc('due_date')

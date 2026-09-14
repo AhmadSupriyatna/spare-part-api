@@ -18,13 +18,7 @@ class PartInstallationResource extends JsonResource
         $workOrder = $this->relevantWorkOrder();
         $ageInDays = $this->ageInDays();
         $ageInRuntimeHours = $this->ageInRuntimeHours();
-
-        $percentUsed = null;
-        if ($workOrder?->interval_days) {
-            $percentUsed = min(100, (int) round(($ageInDays / $workOrder->interval_days) * 100));
-        } elseif ($workOrder?->interval_hours && $ageInRuntimeHours !== null) {
-            $percentUsed = min(100, (int) round(($ageInRuntimeHours / $workOrder->interval_hours) * 100));
-        }
+        $percentUsed = $this->percentUsed();
 
         return [
             'id' => $this->id,

@@ -79,4 +79,30 @@ class PartInstallation extends Model
             ->whereIn('schedule_type', ['calendar', 'runtime'])
             ->first();
     }
+
+    /**
+     * How worn this installation is, as a percentage of its governing work
+     * order's expected calendar or runtime-hour interval — null if there's
+     * no work order to compare against (nothing defines "how long should
+     * this part last" for that equipment+part pair yet).
+     */
+    public function percentUsed(): ?int
+    {
+        $workOrder = $this->relevantWorkOrder();
+
+        if (! $workOrder) {
+            return null;
+        }
+
+        if ($workOrder->interval_days) {
+            return min(100, (int) round(($this->ageInDays() / $workOrder->interval_days) * 100));
+        }
+
+        $ageInRuntimeHours = $this->ageInRuntimeHours();
+        if ($workOrder->interval_hours && $ageInRuntimeHours !== null) {
+            return min(100, (int) round(($ageInRuntimeHours / $workOrder->interval_hours) * 100));
+        }
+
+        return null;
+    }
 }

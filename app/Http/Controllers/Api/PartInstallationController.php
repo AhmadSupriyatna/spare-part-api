@@ -3,17 +3,58 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ScheduleLifetimeReplacementRequest;
 use App\Http\Requests\StorePartInstallationRequest;
 use App\Http\Resources\PartInstallationResource;
+use App\Http\Resources\TaskResource;
+use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Part;
 use App\Models\PartInstallation;
+use App\Services\PartLifetimeService;
+use App\Services\PmSchedulingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 
 class PartInstallationController extends Controller
 {
+    public function __construct(
+        private readonly PartLifetimeService $lifetime,
+        private readonly PmSchedulingService $scheduling,
+    ) {}
+
+    /**
+     * Installed parts in this branch whose remaining usable life has
+     * dropped below 10% — candidates for the PM calendar's second
+     * scheduling source alongside the Task Library.
+     */
+    public function atRisk(Branch $branch): AnonymousResourceCollection
+    {
+        return PartInstallationResource::collection($this->lifetime->atRiskInstallations($branch->id));
+    }
+
+    /**
+     * Schedule this specific worn installation's replacement onto the PM
+     * calendar — turns it into a Task with a one-part checklist.
+     */
+    public function scheduleReplacement(
+        ScheduleLifetimeReplacementRequest $request,
+        PartInstallation $partInstallation
+    ): TaskResource {
+        $data = $request->validated();
+
+        $task = $this->scheduling->scheduleFromLifetime(
+            $partInstallation,
+            $data['due_date'],
+            $data['assigned_to'] ?? null,
+        );
+
+        return new TaskResource(
+            $task->load(['equipment.machine.line.branch', 'assignee', 'partChecks.part'])
+        );
+    }
+
     public function index(Equipment $equipment): AnonymousResourceCollection
     {
         return PartInstallationResource::collection(

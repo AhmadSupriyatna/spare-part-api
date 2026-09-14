@@ -20,11 +20,12 @@ class CompleteTaskRequest extends FormRequest
         /** @var \App\Models\Task|null $task */
         $task = $this->route('task');
 
-        // PM tasks scheduled from a Task Library carry a fixed parts checklist
-        // instead of the single part_stock_id/quantity_used pair every other
-        // task uses — each planned part must be accounted for: replaced (with
-        // a quantity) or not (with a mandatory reason).
-        if ($task && $task->task_library_id) {
+        // PM tasks — scheduled from either a Task Library recipe or a
+        // lifetime-worn-part flag — carry a fixed parts checklist instead of
+        // the single part_stock_id/quantity_used pair every other task uses:
+        // each planned part must be accounted for, replaced (with a
+        // quantity) or not (with a mandatory reason).
+        if ($task && $task->partChecks()->exists()) {
             return [
                 'notes' => ['nullable', 'string'],
                 'checks' => ['required', 'array', 'min:1'],

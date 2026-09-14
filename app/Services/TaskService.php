@@ -55,7 +55,11 @@ class TaskService
         ?array $checks = null,
     ): Task {
         return DB::transaction(function () use ($task, $user, $notes, $partStockId, $quantityUsed, $checks) {
-            if ($task->task_library_id) {
+            // A checklist (task_part_checks rows) is what actually marks a
+            // task as "PM flow" now — it's created whether the task came
+            // from a Task Library recipe or a lifetime-worn-part flag, so
+            // checking for it (not task_library_id specifically) covers both.
+            if ($task->partChecks()->exists()) {
                 $this->completeChecklist($task, $user, $checks ?? []);
             } else {
                 if ($partStockId) {

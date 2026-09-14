@@ -89,6 +89,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/branches/{branch}/task-libraries', [TaskLibraryController::class, 'indexForBranch']);
     Route::get('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'show']);
     Route::get('/branches/{branch}/pm-tasks', [TaskController::class, 'pmSchedule']);
+    Route::get('/branches/{branch}/part-lifetime-alerts', [PartInstallationController::class, 'atRisk']);
 
     // Part <-> Supplier (approved supplier list per part) and Part <-> Equipment
     // (BOM) relations, plus part lifetime tracking: any authenticated role can read.
@@ -167,6 +168,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'store']);
         Route::post('/part-installations/{partInstallation}/remove', [PartInstallationController::class, 'remove']);
+        Route::post(
+            '/part-installations/{partInstallation}/schedule-replacement',
+            [PartInstallationController::class, 'scheduleReplacement']
+        );
     });
 
     // Breakdown replacement approval board: Engineer/Teknisi decide whether a
