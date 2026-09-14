@@ -6,6 +6,7 @@ use App\Enums\TaskStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Task extends Model
 {
@@ -13,6 +14,7 @@ class Task extends Model
 
     protected $fillable = [
         'work_order_id',
+        'task_library_id',
         'equipment_id',
         'assigned_to',
         'title',
@@ -43,6 +45,16 @@ class Task extends Model
     public function workOrder(): BelongsTo
     {
         return $this->belongsTo(WorkOrder::class);
+    }
+
+    public function taskLibrary(): BelongsTo
+    {
+        return $this->belongsTo(TaskLibrary::class);
+    }
+
+    public function partChecks(): HasMany
+    {
+        return $this->hasMany(TaskPartCheck::class);
     }
 
     public function equipment(): BelongsTo

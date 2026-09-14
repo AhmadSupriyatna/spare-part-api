@@ -4,10 +4,12 @@ namespace App\Services;
 
 use App\Enums\ScheduleType;
 use App\Enums\TaskStatus;
+use App\Exceptions\PartStockNotFoundException;
 use App\Models\EquipmentPart;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
+use App\Models\TaskPartCheck;
 use App\Models\User;
 use App\Models\WorkOrder;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +36,15 @@ class TaskService
      * $partStockId/$quantityUsed let the technician confirm or correct what was
      * actually used at completion time, overriding whatever the task was
      * pre-filled with (e.g. from the work order's planned part).
+     *
+     * $checks is used instead, exclusively, when the task came from a Task
+     * Library: one entry per planned part — `{part_id, is_replaced,
+     * quantity_used?, reason?}` — see completeChecklist().
+     *
+     * @param  array<int, array{part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string}>|null  $checks
+     *
+     * @throws PartStockNotFoundException if a checklist part is marked replaced
+     *         but has no stock record in the equipment's branch.
      */
     public function complete(
         Task $task,
@@ -41,27 +52,32 @@ class TaskService
         ?string $notes = null,
         ?int $partStockId = null,
         ?int $quantityUsed = null,
+        ?array $checks = null,
     ): Task {
-        return DB::transaction(function () use ($task, $user, $notes, $partStockId, $quantityUsed) {
-            if ($partStockId) {
-                $task->update([
-                    'part_stock_id' => $partStockId,
-                    'quantity_used' => $quantityUsed,
-                ]);
-                // Force the relation to re-resolve against the new foreign key
-                // instead of serving whatever was cached on it before.
-                $task->unsetRelation('partStock');
-            }
+        return DB::transaction(function () use ($task, $user, $notes, $partStockId, $quantityUsed, $checks) {
+            if ($task->task_library_id) {
+                $this->completeChecklist($task, $user, $checks ?? []);
+            } else {
+                if ($partStockId) {
+                    $task->update([
+                        'part_stock_id' => $partStockId,
+                        'quantity_used' => $quantityUsed,
+                    ]);
+                    // Force the relation to re-resolve against the new foreign key
+                    // instead of serving whatever was cached on it before.
+                    $task->unsetRelation('partStock');
+                }
 
-            if ($task->part_stock_id && $task->quantity_used) {
-                $this->stockMovements->record(
-                    partStock: $task->partStock,
-                    type: StockLedger::TYPE_ISSUE,
-                    quantityChange: -$task->quantity_used,
-                    user: $user,
-                    notes: "Dipakai untuk tugas #{$task->id}: {$task->title}",
-                    reference: $task,
-                );
+                if ($task->part_stock_id && $task->quantity_used) {
+                    $this->stockMovements->record(
+                        partStock: $task->partStock,
+                        type: StockLedger::TYPE_ISSUE,
+                        quantityChange: -$task->quantity_used,
+                        user: $user,
+                        notes: "Dipakai untuk tugas #{$task->id}: {$task->title}",
+                        reference: $task,
+                    );
+                }
             }
 
             $task->update([
@@ -79,6 +95,49 @@ class TaskService
 
             return $task;
         });
+    }
+
+    /**
+     * @param  array<int, array{part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string}>  $checks
+     */
+    private function completeChecklist(Task $task, ?User $user, array $checks): void
+    {
+        $branchId = $task->equipment->machine->line->branch_id;
+
+        foreach ($checks as $check) {
+            $partCheck = TaskPartCheck::where('task_id', $task->id)
+                ->where('part_id', $check['part_id'])
+                ->firstOrFail();
+
+            $isReplaced = (bool) $check['is_replaced'];
+            $quantityUsedForPart = $isReplaced ? ($check['quantity_used'] ?? $partCheck->quantity_planned) : null;
+            $reason = $isReplaced ? null : ($check['reason'] ?? null);
+
+            if ($isReplaced) {
+                $partStock = PartStock::where('part_id', $check['part_id'])
+                    ->where('branch_id', $branchId)
+                    ->first();
+
+                if (! $partStock) {
+                    throw new PartStockNotFoundException($check['part_id'], $branchId);
+                }
+
+                $this->stockMovements->record(
+                    partStock: $partStock,
+                    type: StockLedger::TYPE_ISSUE,
+                    quantityChange: -$quantityUsedForPart,
+                    user: $user,
+                    notes: "Checklist WO PM #{$task->id}: {$task->title}",
+                    reference: $task,
+                );
+            }
+
+            $partCheck->update([
+                'is_replaced' => $isReplaced,
+                'quantity_used' => $quantityUsedForPart,
+                'reason' => $reason,
+            ]);
+        }
     }
 
     public function cancel(Task $task, ?string $notes = null): Task

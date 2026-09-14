@@ -18,6 +18,8 @@ use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\StockAlertController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\TaskLibraryController;
+use App\Http\Controllers\Api\TaskLibraryPartController;
 use App\Http\Controllers\Api\UnitController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkOrderController;
@@ -79,6 +81,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/mine', [TaskController::class, 'mine']);
     Route::get('/tasks/{task}', [TaskController::class, 'show']);
 
+    // Task Library ("PM task" recipes: activity + equipment + planned parts)
+    // and the PM schedule/ledger of tasks generated from them: any
+    // authenticated role can read.
+    Route::get('/equipment/{equipment}/task-libraries', [TaskLibraryController::class, 'index']);
+    Route::get('/branches/{branch}/task-libraries', [TaskLibraryController::class, 'indexForBranch']);
+    Route::get('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'show']);
+    Route::get('/branches/{branch}/pm-tasks', [TaskController::class, 'pmSchedule']);
+
     // Part <-> Supplier (approved supplier list per part) and Part <-> Equipment
     // (BOM) relations, plus part lifetime tracking: any authenticated role can read.
     Route::get('/parts/{part}/suppliers', [PartSupplierController::class, 'index']);
@@ -133,6 +143,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/equipment/{equipment}/tasks', [TaskController::class, 'store']);
         Route::put('/tasks/{task}', [TaskController::class, 'update']);
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
+
+        Route::post('/equipment/{equipment}/task-libraries', [TaskLibraryController::class, 'store']);
+        Route::put('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'update']);
+        Route::delete('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'destroy']);
+        Route::post('/task-libraries/{taskLibrary}/parts', [TaskLibraryPartController::class, 'store']);
+        Route::delete('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'destroy']);
+        Route::post('/task-libraries/{taskLibrary}/schedule', [TaskLibraryController::class, 'schedule']);
 
         Route::get('/users', [UserController::class, 'index']);
 
