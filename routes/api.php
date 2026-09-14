@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
+use App\Http\Controllers\Api\CompanySettingController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\EquipmentPartController;
 use App\Http\Controllers\Api\LineController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\StockAlertController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\UnitController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkOrderController;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Master data: any authenticated role can read.
     Route::apiResource('branches', BranchController::class)->only(['index', 'show']);
     Route::apiResource('parts', PartController::class)->only(['index', 'show']);
+    Route::get('/units', [UnitController::class, 'index']);
+    Route::get('/settings/company', [CompanySettingController::class, 'show']);
     Route::get('/branches/{branch}/suppliers', [SupplierController::class, 'index']);
     Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
     Route::get('/branches/{branch}/locations', [LocationController::class, 'index']);
@@ -95,6 +99,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin_gudang|supervisor|superadmin')->group(function () {
         Route::apiResource('branches', BranchController::class)->only(['store', 'update', 'destroy']);
         Route::apiResource('parts', PartController::class)->only(['store', 'update', 'destroy']);
+        Route::post('/units', [UnitController::class, 'store']);
+        Route::put('/units/{unit}', [UnitController::class, 'update']);
+        Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+        Route::put('/settings/company', [CompanySettingController::class, 'update']);
         Route::post('/branches/{branch}/suppliers', [SupplierController::class, 'store']);
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
         Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy']);

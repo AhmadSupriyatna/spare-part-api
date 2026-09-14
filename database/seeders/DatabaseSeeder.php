@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RoleSeeder::class);
+        $this->call(UnitSeeder::class);
 
         // Users are created before the demo data so the reactive tasks it
         // seeds (see below) have someone real to land on - a fresh seed

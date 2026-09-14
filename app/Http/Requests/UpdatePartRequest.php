@@ -25,7 +25,7 @@ class UpdatePartRequest extends FormRequest
             ],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'unit' => ['sometimes', 'required', 'string', 'max:50'],
+            'unit' => ['sometimes', 'required', 'string', 'max:50', 'exists:units,name'],
             'category' => ['nullable', 'string', 'max:100'],
             'price' => ['sometimes', 'numeric', 'min:0'],
             'image' => ['nullable', 'image', 'max:5120'],
