@@ -31,6 +31,8 @@ class TaskResource extends JsonResource
             'completed_at' => $this->completed_at,
             'completion_notes' => $this->completion_notes,
             'part_stock_id' => $this->part_stock_id,
+            'part_name' => $this->whenLoaded('partStock', fn () => $this->partStock?->part?->name),
+            'item_master_no' => $this->whenLoaded('partStock', fn () => $this->partStock?->part?->item_master_no),
             'quantity_used' => $this->quantity_used,
             'is_overdue' => $this->isOverdue(),
             'created_at' => $this->created_at,

@@ -54,7 +54,9 @@ class WorkOrderController extends Controller
      */
     public function generateTask(WorkOrder $workOrder): TaskResource
     {
-        return new TaskResource($this->tasks->generateNextTask($workOrder));
+        $task = $this->tasks->generateNextTask($workOrder);
+
+        return new TaskResource($task->load('partStock.part'));
     }
 
     /**

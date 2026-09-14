@@ -22,7 +22,7 @@ class TaskController extends Controller
     public function index(Equipment $equipment): AnonymousResourceCollection
     {
         return TaskResource::collection(
-            $equipment->tasks()->with('assignee')->latest('due_date')->get()
+            $equipment->tasks()->with(['assignee', 'partStock.part'])->latest('due_date')->get()
         );
     }
 
@@ -33,7 +33,7 @@ class TaskController extends Controller
     {
         return TaskResource::collection(
             Task::where('assigned_to', $request->user()->id)
-                ->with(['equipment', 'assignee'])
+                ->with(['equipment', 'assignee', 'partStock.part'])
                 ->orderByRaw("CASE status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END")
                 ->orderBy('due_date')
                 ->get()
@@ -53,7 +53,7 @@ class TaskController extends Controller
 
     public function show(Task $task): TaskResource
     {
-        return new TaskResource($task->load(['equipment', 'assignee', 'workOrder', 'partStock']));
+        return new TaskResource($task->load(['equipment', 'assignee', 'workOrder', 'partStock.part']));
     }
 
     public function update(UpdateTaskRequest $request, Task $task): TaskResource
@@ -70,9 +70,17 @@ class TaskController extends Controller
 
     public function complete(CompleteTaskRequest $request, Task $task): TaskResource
     {
-        return new TaskResource(
-            $this->tasks->complete($task, $request->user(), $request->validated()['notes'] ?? null)
+        $data = $request->validated();
+
+        $updated = $this->tasks->complete(
+            task: $task,
+            user: $request->user(),
+            notes: $data['notes'] ?? null,
+            partStockId: $data['part_stock_id'] ?? null,
+            quantityUsed: $data['quantity_used'] ?? null,
         );
+
+        return new TaskResource($updated->load('partStock.part'));
     }
 
     public function cancel(CancelTaskRequest $request, Task $task): TaskResource
