@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreMachineRequest;
 use App\Http\Requests\UpdateMachineRequest;
 use App\Http\Resources\MachineResource;
+use App\Models\Branch;
 use App\Models\Machine;
 use App\Models\ProductionLine;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -16,6 +17,19 @@ class MachineController extends Controller
     public function index(ProductionLine $line): AnonymousResourceCollection
     {
         return MachineResource::collection($line->machines()->orderBy('name')->get());
+    }
+
+    /**
+     * Flat list of every machine in a branch, across all its lines.
+     */
+    public function forBranch(Branch $branch): AnonymousResourceCollection
+    {
+        return MachineResource::collection(
+            Machine::whereHas('line', fn ($query) => $query->where('branch_id', $branch->id))
+                ->with('line')
+                ->orderBy('name')
+                ->get()
+        );
     }
 
     public function store(StoreMachineRequest $request, ProductionLine $line): MachineResource
