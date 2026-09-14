@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateWorkOrderRequest;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\WorkOrderResource;
 use App\Models\Equipment;
+use App\Models\Part;
 use App\Models\WorkOrder;
 use App\Services\TaskService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -19,7 +20,7 @@ class WorkOrderController extends Controller
 
     public function index(Equipment $equipment): AnonymousResourceCollection
     {
-        return WorkOrderResource::collection($equipment->workOrders()->orderBy('title')->get());
+        return WorkOrderResource::collection($equipment->workOrders()->with('part')->orderBy('title')->get());
     }
 
     public function store(StoreWorkOrderRequest $request, Equipment $equipment): WorkOrderResource
@@ -54,5 +55,16 @@ class WorkOrderController extends Controller
     public function generateTask(WorkOrder $workOrder): TaskResource
     {
         return new TaskResource($this->tasks->generateNextTask($workOrder));
+    }
+
+    /**
+     * Which work orders (across all equipment) reference this part —
+     * surfaces the existing WorkOrder->Part link from the part's side.
+     */
+    public function forPart(Part $part): AnonymousResourceCollection
+    {
+        return WorkOrderResource::collection(
+            $part->workOrders()->with('equipment')->get()
+        );
     }
 }

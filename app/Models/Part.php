@@ -35,6 +35,26 @@ class Part extends Model
         return $this->hasMany(PartStock::class);
     }
 
+    public function partSuppliers(): HasMany
+    {
+        return $this->hasMany(PartSupplier::class);
+    }
+
+    public function equipmentParts(): HasMany
+    {
+        return $this->hasMany(EquipmentPart::class);
+    }
+
+    public function installations(): HasMany
+    {
+        return $this->hasMany(PartInstallation::class);
+    }
+
+    public function workOrders(): HasMany
+    {
+        return $this->hasMany(WorkOrder::class);
+    }
+
     public function imageUrl(): ?string
     {
         return $this->image_path ? Storage::disk('public')->url($this->image_path) : null;

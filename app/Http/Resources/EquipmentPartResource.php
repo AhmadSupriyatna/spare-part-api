@@ -6,9 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\WorkOrder
+ * @mixin \App\Models\EquipmentPart
  */
-class WorkOrderResource extends JsonResource
+class EquipmentPartResource extends JsonResource
 {
     /**
      * @return array<string, mixed>
@@ -21,14 +21,9 @@ class WorkOrderResource extends JsonResource
             'equipment_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->name),
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
-            'title' => $this->title,
-            'description' => $this->description,
-            'schedule_type' => $this->schedule_type,
-            'interval_days' => $this->interval_days,
-            'interval_hours' => $this->interval_hours,
-            'is_active' => $this->is_active,
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
+            'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
+            'quantity_required' => $this->quantity_required,
+            'notes' => $this->notes,
         ];
     }
 }

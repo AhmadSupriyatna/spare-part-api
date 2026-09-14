@@ -40,4 +40,14 @@ class Equipment extends Model
     {
         return $this->hasMany(Task::class);
     }
+
+    public function equipmentParts(): HasMany
+    {
+        return $this->hasMany(EquipmentPart::class);
+    }
+
+    public function partInstallations(): HasMany
+    {
+        return $this->hasMany(PartInstallation::class);
+    }
 }

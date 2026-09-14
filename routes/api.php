@@ -3,11 +3,14 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\EquipmentController;
+use App\Http\Controllers\Api\EquipmentPartController;
 use App\Http\Controllers\Api\LineController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MachineController;
 use App\Http\Controllers\Api\PartController;
+use App\Http\Controllers\Api\PartInstallationController;
 use App\Http\Controllers\Api\PartStockController;
+use App\Http\Controllers\Api\PartSupplierController;
 use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\StockAlertController;
 use App\Http\Controllers\Api\SupplierController;
@@ -52,9 +55,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // any authenticated role can read.
     Route::get('/equipment/{equipment}/work-orders', [WorkOrderController::class, 'index']);
     Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show']);
+    Route::get('/parts/{part}/work-orders', [WorkOrderController::class, 'forPart']);
     Route::get('/equipment/{equipment}/tasks', [TaskController::class, 'index']);
     Route::get('/tasks/mine', [TaskController::class, 'mine']);
     Route::get('/tasks/{task}', [TaskController::class, 'show']);
+
+    // Part <-> Supplier (approved supplier list per part) and Part <-> Equipment
+    // (BOM) relations, plus part lifetime tracking: any authenticated role can read.
+    Route::get('/parts/{part}/suppliers', [PartSupplierController::class, 'index']);
+    Route::get('/equipment/{equipment}/parts', [EquipmentPartController::class, 'index']);
+    Route::get('/parts/{part}/equipment', [EquipmentPartController::class, 'forPart']);
+    Route::get('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'index']);
 
     // Any authenticated role can work their own tasks and log line runtime.
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
@@ -101,5 +112,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/reorder-requests/{reorderRequest}/approve', [ReorderRequestController::class, 'approve']);
         Route::post('/reorder-requests/{reorderRequest}/mark-ordered', [ReorderRequestController::class, 'markOrdered']);
         Route::post('/reorder-requests/{reorderRequest}/cancel', [ReorderRequestController::class, 'cancel']);
+
+        Route::post('/parts/{part}/suppliers', [PartSupplierController::class, 'store']);
+        Route::put('/part-suppliers/{partSupplier}', [PartSupplierController::class, 'update']);
+        Route::delete('/part-suppliers/{partSupplier}', [PartSupplierController::class, 'destroy']);
+
+        Route::post('/equipment/{equipment}/parts', [EquipmentPartController::class, 'store']);
+        Route::delete('/equipment-parts/{equipmentPart}', [EquipmentPartController::class, 'destroy']);
+
+        Route::post('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'store']);
+        Route::post('/part-installations/{partInstallation}/remove', [PartInstallationController::class, 'remove']);
     });
 });
