@@ -18,6 +18,7 @@ class MachineResource extends JsonResource
         return [
             'id' => $this->id,
             'line_id' => $this->line_id,
+            'line_name' => $this->whenLoaded('line', fn () => $this->line?->name),
             'code' => $this->code,
             'name' => $this->name,
             'category' => $this->category,

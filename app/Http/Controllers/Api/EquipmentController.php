@@ -27,7 +27,7 @@ class EquipmentController extends Controller
 
     public function show(Equipment $equipment): EquipmentResource
     {
-        return new EquipmentResource($equipment);
+        return new EquipmentResource($equipment->load('machine.line'));
     }
 
     public function update(UpdateEquipmentRequest $request, Equipment $equipment): EquipmentResource

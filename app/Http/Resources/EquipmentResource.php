@@ -18,6 +18,9 @@ class EquipmentResource extends JsonResource
         return [
             'id' => $this->id,
             'machine_id' => $this->machine_id,
+            'machine_name' => $this->whenLoaded('machine', fn () => $this->machine?->name),
+            'line_id' => $this->whenLoaded('machine', fn () => $this->machine?->line_id),
+            'line_name' => $this->whenLoaded('machine', fn () => $this->machine?->line?->name),
             'code' => $this->code,
             'name' => $this->name,
             'category' => $this->category,

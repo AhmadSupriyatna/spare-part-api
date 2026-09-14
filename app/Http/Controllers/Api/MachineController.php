@@ -27,7 +27,7 @@ class MachineController extends Controller
 
     public function show(Machine $machine): MachineResource
     {
-        return new MachineResource($machine);
+        return new MachineResource($machine->load('line'));
     }
 
     public function update(UpdateMachineRequest $request, Machine $machine): MachineResource
