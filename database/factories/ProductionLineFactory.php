@@ -24,6 +24,7 @@ class ProductionLineFactory extends Factory
             'branch_id' => Branch::factory(),
             'code' => 'LINE-'.$this->faker->unique()->numberBetween(1, 999),
             'name' => 'Line '.$this->faker->unique()->numberBetween(1, 999),
+            'runtime_hours' => $this->faker->numberBetween(0, 500),
             'is_active' => true,
         ];
     }

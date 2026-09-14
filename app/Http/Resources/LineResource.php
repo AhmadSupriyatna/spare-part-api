@@ -20,6 +20,7 @@ class LineResource extends JsonResource
             'branch_id' => $this->branch_id,
             'code' => $this->code,
             'name' => $this->name,
+            'runtime_hours' => $this->runtime_hours,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

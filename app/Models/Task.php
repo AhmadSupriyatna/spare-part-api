@@ -71,7 +71,7 @@ class Task extends Model
         }
 
         if ($this->due_runtime_hours !== null) {
-            return $this->equipment->machine->runtime_hours >= $this->due_runtime_hours;
+            return $this->equipment->machine->line->runtime_hours >= $this->due_runtime_hours;
         }
 
         return false;

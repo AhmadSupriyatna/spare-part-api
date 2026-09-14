@@ -17,7 +17,6 @@ return new class extends Migration
             $table->string('code');
             $table->string('name');
             $table->string('category')->nullable();
-            $table->unsignedInteger('runtime_hours')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

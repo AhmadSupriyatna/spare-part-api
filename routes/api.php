@@ -56,11 +56,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks/mine', [TaskController::class, 'mine']);
     Route::get('/tasks/{task}', [TaskController::class, 'show']);
 
-    // Any authenticated role can work their own tasks and log machine runtime.
+    // Any authenticated role can work their own tasks and log line runtime.
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
     Route::post('/tasks/{task}/complete', [TaskController::class, 'complete']);
     Route::post('/tasks/{task}/cancel', [TaskController::class, 'cancel']);
-    Route::post('/machines/{machine}/runtime', [MachineController::class, 'addRuntime']);
+    Route::post('/lines/{line}/runtime', [LineController::class, 'addRuntime']);
 
     // Master data: only warehouse admin, supervisor, and superadmin can write.
     Route::middleware('role:admin_gudang|supervisor|superadmin')->group(function () {

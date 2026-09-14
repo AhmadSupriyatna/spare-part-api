@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\AddMachineRuntimeRequest;
 use App\Http\Requests\StoreMachineRequest;
 use App\Http\Requests\UpdateMachineRequest;
 use App\Http\Resources\MachineResource;
@@ -43,12 +42,5 @@ class MachineController extends Controller
         $machine->delete();
 
         return response()->noContent();
-    }
-
-    public function addRuntime(AddMachineRuntimeRequest $request, Machine $machine): MachineResource
-    {
-        $machine->increment('runtime_hours', $request->validated()['hours']);
-
-        return new MachineResource($machine->fresh());
     }
 }

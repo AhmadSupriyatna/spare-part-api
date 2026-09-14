@@ -30,7 +30,6 @@ class StoreMachineRequest extends FormRequest
             ],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:100'],
-            'runtime_hours' => ['sometimes', 'integer', 'min:0'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AddLineRuntimeRequest;
 use App\Http\Requests\StoreLineRequest;
 use App\Http\Requests\UpdateLineRequest;
 use App\Http\Resources\LineResource;
@@ -42,5 +43,12 @@ class LineController extends Controller
         $line->delete();
 
         return response()->noContent();
+    }
+
+    public function addRuntime(AddLineRuntimeRequest $request, ProductionLine $line): LineResource
+    {
+        $line->increment('runtime_hours', $request->validated()['hours']);
+
+        return new LineResource($line->fresh());
     }
 }

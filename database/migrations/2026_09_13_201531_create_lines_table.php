@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('branch_id')->constrained('branches')->cascadeOnDelete();
             $table->string('code');
             $table->string('name');
+            $table->unsignedInteger('runtime_hours')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

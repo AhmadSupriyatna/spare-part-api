@@ -86,7 +86,7 @@ class TaskService
         }
 
         if ($workOrder->schedule_type === ScheduleType::Runtime && $workOrder->interval_hours) {
-            $dueRuntimeHours = $workOrder->equipment->machine->runtime_hours + $workOrder->interval_hours;
+            $dueRuntimeHours = $workOrder->equipment->machine->line->runtime_hours + $workOrder->interval_hours;
         }
 
         return Task::create([

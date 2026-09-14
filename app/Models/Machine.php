@@ -16,14 +16,12 @@ class Machine extends Model
         'code',
         'name',
         'category',
-        'runtime_hours',
         'is_active',
     ];
 
     protected function casts(): array
     {
         return [
-            'runtime_hours' => 'integer',
             'is_active' => 'boolean',
         ];
     }

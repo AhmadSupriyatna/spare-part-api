@@ -17,12 +17,14 @@ class ProductionLine extends Model
         'branch_id',
         'code',
         'name',
+        'runtime_hours',
         'is_active',
     ];
 
     protected function casts(): array
     {
         return [
+            'runtime_hours' => 'integer',
             'is_active' => 'boolean',
         ];
     }

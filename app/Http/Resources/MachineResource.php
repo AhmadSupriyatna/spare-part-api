@@ -21,7 +21,6 @@ class MachineResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'category' => $this->category,
-            'runtime_hours' => $this->runtime_hours,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
