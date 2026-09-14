@@ -106,15 +106,4 @@ class PartStockController extends Controller
             $location->partStocks()->with('part')->get()
         );
     }
-
-    /**
-     * Take a part out of its current bin, so it can be registered into a
-     * different one (see UpdatePartStockLocationRequest's safety rule).
-     */
-    public function removeLocation(PartStock $partStock): PartStockResource
-    {
-        $partStock->update(['location_id' => null]);
-
-        return new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location']));
-    }
 }

@@ -34,15 +34,6 @@ class UpdatePartStockLocationRequest extends FormRequest
                 return;
             }
 
-            // Safety rule: once a part is placed in a bin, it can't be re-registered
-            // into a different bin from here. Moving stock physically should go
-            // through removing it from its current location first.
-            if ($partStock->location_id !== null && (int) $partStock->location_id !== (int) $locationId) {
-                $validator->errors()->add('location_id', 'Part ini sudah terdaftar di lokasi lain. Lepaskan dari lokasi tersebut terlebih dahulu sebelum mendaftarkan ke lokasi baru.');
-
-                return;
-            }
-
             $belongsToSameBranch = Location::where('id', $locationId)
                 ->where('branch_id', $partStock->branch_id)
                 ->exists();

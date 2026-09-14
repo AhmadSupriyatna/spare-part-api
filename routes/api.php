@@ -91,7 +91,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])
             ->middleware('throttle:stock-adjustment');
         Route::put('/part-stocks/{partStock}/location', [PartStockController::class, 'updateLocation']);
-        Route::delete('/part-stocks/{partStock}/location', [PartStockController::class, 'removeLocation']);
 
         Route::post('/branches/{branch}/lines', [LineController::class, 'store']);
         Route::put('/lines/{line}', [LineController::class, 'update']);
