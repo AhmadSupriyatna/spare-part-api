@@ -21,7 +21,7 @@ class ReceiveStockRequest extends FormRequest
     {
         return [
             'quantity' => ['required', 'integer', 'min:1'],
-            'unit_cost' => ['nullable', 'numeric', 'min:0'],
+            'total_price' => ['required', 'numeric', 'min:0'],
             'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
             'notes' => ['nullable', 'string'],
         ];

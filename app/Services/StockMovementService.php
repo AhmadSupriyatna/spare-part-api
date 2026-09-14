@@ -24,6 +24,12 @@ class StockMovementService
      *
      * @throws InsufficientStockException if the resulting balance would go below zero.
      */
+    /**
+     * @param  \Closure(PartStock $locked, int $newBalance): array<string, mixed>|null  $additionalUpdates
+     *         Runs inside the same locked transaction as the quantity change, so it can safely read the
+     *         pre-update quantity/cost off $locked (e.g. to fold a receiving's cost into a moving average)
+     *         and return extra columns to save alongside quantity_on_hand.
+     */
     public function record(
         PartStock $partStock,
         string $type,
@@ -31,8 +37,9 @@ class StockMovementService
         ?User $user = null,
         ?string $notes = null,
         ?Model $reference = null,
+        ?\Closure $additionalUpdates = null,
     ): StockLedger {
-        return DB::transaction(function () use ($partStock, $type, $quantityChange, $user, $notes, $reference) {
+        return DB::transaction(function () use ($partStock, $type, $quantityChange, $user, $notes, $reference, $additionalUpdates) {
             /** @var PartStock $locked */
             $locked = PartStock::whereKey($partStock->id)->lockForUpdate()->firstOrFail();
 
@@ -42,7 +49,13 @@ class StockMovementService
                 throw new InsufficientStockException($locked->quantity_on_hand, abs($quantityChange));
             }
 
-            $locked->update(['quantity_on_hand' => $newBalance]);
+            $updates = ['quantity_on_hand' => $newBalance];
+
+            if ($additionalUpdates) {
+                $updates = array_merge($updates, $additionalUpdates($locked, $newBalance));
+            }
+
+            $locked->update($updates);
 
             $ledgerEntry = StockLedger::create([
                 'part_stock_id' => $locked->id,

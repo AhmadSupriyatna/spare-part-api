@@ -33,6 +33,12 @@ class PartStockController extends Controller
         return new PartStockResource($partStock->load(['part', 'branch', 'supplier', 'location']));
     }
 
+    /**
+     * Receiving folds the batch's total price into the stock's unit_cost as a
+     * moving (weighted) average, rather than overwriting it - handles partial
+     * price increases across separate purchases gracefully:
+     *   new_unit_cost = (old_unit_cost * old_qty + total_price) / (old_qty + qty_received)
+     */
     public function receive(ReceiveStockRequest $request, PartStock $partStock): JsonResponse
     {
         $data = $request->validated();
@@ -43,16 +49,20 @@ class PartStockController extends Controller
             quantityChange: $data['quantity'],
             user: $request->user(),
             notes: $data['notes'] ?? null,
+            additionalUpdates: function (PartStock $locked, int $newBalance) use ($data) {
+                $costBasis = ((float) $locked->unit_cost * $locked->quantity_on_hand) + $data['total_price'];
+
+                $updates = [
+                    'unit_cost' => $newBalance > 0 ? round($costBasis / $newBalance, 2) : $locked->unit_cost,
+                ];
+
+                if (! empty($data['supplier_id'])) {
+                    $updates['supplier_id'] = $data['supplier_id'];
+                }
+
+                return $updates;
+            },
         );
-
-        $updates = array_filter([
-            'unit_cost' => $data['unit_cost'] ?? null,
-            'supplier_id' => $data['supplier_id'] ?? null,
-        ], fn ($value) => $value !== null);
-
-        if ($updates !== []) {
-            $partStock->update($updates);
-        }
 
         return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
             ->response()
