@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/equipment/{equipment}/parts', [EquipmentPartController::class, 'index']);
     Route::get('/parts/{part}/equipment', [EquipmentPartController::class, 'forPart']);
     Route::get('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'index']);
+    Route::get('/parts/{part}/part-installations', [PartInstallationController::class, 'forPart']);
     Route::get('/locations/{location}/part-stocks', [PartStockController::class, 'forLocation']);
 
     // Any authenticated role can work their own tasks and log line runtime.
@@ -90,6 +91,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])
             ->middleware('throttle:stock-adjustment');
         Route::put('/part-stocks/{partStock}/location', [PartStockController::class, 'updateLocation']);
+        Route::delete('/part-stocks/{partStock}/location', [PartStockController::class, 'removeLocation']);
 
         Route::post('/branches/{branch}/lines', [LineController::class, 'store']);
         Route::put('/lines/{line}', [LineController::class, 'update']);

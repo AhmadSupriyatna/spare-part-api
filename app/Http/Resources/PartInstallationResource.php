@@ -29,6 +29,9 @@ class PartInstallationResource extends JsonResource
         return [
             'id' => $this->id,
             'equipment_id' => $this->equipment_id,
+            'equipment_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->name),
+            'machine_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->machine?->name),
+            'line_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->machine?->line?->name),
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),

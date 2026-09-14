@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePartInstallationRequest;
 use App\Http\Resources\PartInstallationResource;
 use App\Models\Equipment;
+use App\Models\Part;
 use App\Models\PartInstallation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -18,6 +19,19 @@ class PartInstallationController extends Controller
         return PartInstallationResource::collection(
             $equipment->partInstallations()
                 ->with(['part', 'installedBy'])
+                ->orderByDesc('installed_at')
+                ->get()
+        );
+    }
+
+    /**
+     * Reverse lookup: everywhere this part is (or has been) installed.
+     */
+    public function forPart(Part $part): AnonymousResourceCollection
+    {
+        return PartInstallationResource::collection(
+            $part->installations()
+                ->with(['equipment.machine.line', 'installedBy'])
                 ->orderByDesc('installed_at')
                 ->get()
         );
