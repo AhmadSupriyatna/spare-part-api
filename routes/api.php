@@ -47,10 +47,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/branches/{branch}/lines', [LineController::class, 'index']);
     Route::get('/lines/{line}', [LineController::class, 'show']);
     Route::get('/lines/{line}/machines', [MachineController::class, 'index']);
-    Route::get('/branches/{branch}/machines', [MachineController::class, 'forBranch']);
     Route::get('/machines/{machine}', [MachineController::class, 'show']);
     Route::get('/machines/{machine}/equipment', [EquipmentController::class, 'index']);
-    Route::get('/branches/{branch}/equipment', [EquipmentController::class, 'forBranch']);
     Route::get('/equipment/{equipment}', [EquipmentController::class, 'show']);
 
     // Work orders (maintenance schedule templates) and tasks (actual work items):

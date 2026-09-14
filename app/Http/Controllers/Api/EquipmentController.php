@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreEquipmentRequest;
 use App\Http\Requests\UpdateEquipmentRequest;
 use App\Http\Resources\EquipmentResource;
-use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Machine;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,19 +16,6 @@ class EquipmentController extends Controller
     public function index(Machine $machine): AnonymousResourceCollection
     {
         return EquipmentResource::collection($machine->equipment()->orderBy('name')->get());
-    }
-
-    /**
-     * Flat list of every equipment in a branch, across all its lines/machines.
-     */
-    public function forBranch(Branch $branch): AnonymousResourceCollection
-    {
-        return EquipmentResource::collection(
-            Equipment::whereHas('machine.line', fn ($query) => $query->where('branch_id', $branch->id))
-                ->with('machine.line')
-                ->orderBy('name')
-                ->get()
-        );
     }
 
     public function store(StoreEquipmentRequest $request, Machine $machine): EquipmentResource
