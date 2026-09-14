@@ -7,6 +7,7 @@ use App\Http\Requests\StoreWorkOrderRequest;
 use App\Http\Requests\UpdateWorkOrderRequest;
 use App\Http\Resources\TaskResource;
 use App\Http\Resources\WorkOrderResource;
+use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Part;
 use App\Models\WorkOrder;
@@ -21,6 +22,20 @@ class WorkOrderController extends Controller
     public function index(Equipment $equipment): AnonymousResourceCollection
     {
         return WorkOrderResource::collection($equipment->workOrders()->with('part')->orderBy('title')->get());
+    }
+
+    /**
+     * Every work order across the branch — the standalone "Work Order" list
+     * page needs this without knowing an equipment id up front.
+     */
+    public function indexForBranch(Branch $branch): AnonymousResourceCollection
+    {
+        return WorkOrderResource::collection(
+            WorkOrder::whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+                ->with(['equipment.machine.line', 'part'])
+                ->orderBy('title')
+                ->get()
+        );
     }
 
     public function store(StoreWorkOrderRequest $request, Equipment $equipment): WorkOrderResource

@@ -75,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Work orders (maintenance schedule templates) and tasks (actual work items):
     // any authenticated role can read.
     Route::get('/equipment/{equipment}/work-orders', [WorkOrderController::class, 'index']);
+    Route::get('/branches/{branch}/work-orders', [WorkOrderController::class, 'indexForBranch']);
     Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show']);
     Route::get('/parts/{part}/work-orders', [WorkOrderController::class, 'forPart']);
     Route::get('/equipment/{equipment}/tasks', [TaskController::class, 'index']);
