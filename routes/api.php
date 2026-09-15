@@ -14,8 +14,10 @@ use App\Http\Controllers\Api\PartRepairController;
 use App\Http\Controllers\Api\PartStockController;
 use App\Http\Controllers\Api\PartReplacementRequestController;
 use App\Http\Controllers\Api\PartSupplierController;
+use App\Http\Controllers\Api\PartUnitActionRequestController;
 use App\Http\Controllers\Api\PartUnitController;
 use App\Http\Controllers\Api\PublicBreakdownController;
+use App\Http\Controllers\Api\PublicPartUnitController;
 use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\StockAlertController;
 use App\Http\Controllers\Api\SupplierController;
@@ -29,9 +31,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
-// Unauthenticated breakdown QR-scan flow: read-only lookups plus submitting a
-// replacement request. Nothing here touches stock or installations — that
-// only happens once an Engineer/Teknisi approves the request (see below).
+// Unauthenticated shop-floor QR-scan flows: read-only lookups plus submitting
+// a request. Nothing here touches stock or installations — that only happens
+// once an Engineer/Teknisi approves the request (see below).
 Route::middleware('throttle:breakdown-public')->prefix('public')->group(function () {
     Route::get('/parts/{part}', [PublicBreakdownController::class, 'showPart']);
     Route::get('/branches', [PublicBreakdownController::class, 'branches']);
@@ -40,6 +42,12 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
     Route::get('/machines/{machine}/equipment', [PublicBreakdownController::class, 'equipment']);
     Route::get('/parts/{part}/branches/{branch}/equipment', [PublicBreakdownController::class, 'equipmentForPartInBranch']);
     Route::post('/replacement-requests', [PublicBreakdownController::class, 'store']);
+
+    // QR-per-unit flow: scanning the tag on a specific physical part unit —
+    // reuses the branches/equipment-for-part lookups above for the reinstall
+    // picker, since a unit's part_id feeds the same BOM-filtered endpoint.
+    Route::get('/part-units/{partUnit}', [PublicPartUnitController::class, 'show']);
+    Route::post('/part-units/{partUnit}/action-requests', [PublicPartUnitController::class, 'store']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -192,5 +200,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/branches/{branch}/replacement-requests', [PartReplacementRequestController::class, 'index']);
         Route::post('/replacement-requests/{partReplacementRequest}/approve', [PartReplacementRequestController::class, 'approve']);
         Route::post('/replacement-requests/{partReplacementRequest}/reject', [PartReplacementRequestController::class, 'reject']);
+
+        Route::get('/branches/{branch}/part-unit-action-requests', [PartUnitActionRequestController::class, 'index']);
+        Route::post('/part-unit-action-requests/{partUnitActionRequest}/approve', [PartUnitActionRequestController::class, 'approve']);
+        Route::post('/part-unit-action-requests/{partUnitActionRequest}/reject', [PartUnitActionRequestController::class, 'reject']);
     });
 });
