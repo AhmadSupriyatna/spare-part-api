@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\PartUnitController;
 use App\Http\Controllers\Api\PublicBreakdownController;
 use App\Http\Controllers\Api\PublicPartUnitController;
 use App\Http\Controllers\Api\ReorderRequestController;
+use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\StockAlertController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TaskController;
@@ -57,6 +58,7 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
 Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'me']);
+    Route::get('/search', [SearchController::class, 'index']);
 
     // Master data: any authenticated role can read.
     Route::apiResource('branches', BranchController::class)->only(['index', 'show']);
