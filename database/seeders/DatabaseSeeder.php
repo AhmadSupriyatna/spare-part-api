@@ -37,10 +37,35 @@ class DatabaseSeeder extends Seeder
         ]);
         $teknisi->assignRole(UserRole::Teknisi->value);
 
+        // Admin Spare Part and Engineer are deliberately scoped to a single
+        // branch below (not all of them, unlike Superadmin/Teknisi/
+        // Supervisor) so the branch.access restriction on those roles is
+        // actually exercised by a fresh seed, not just true by omission.
+        $adminSparePart = User::factory()->create([
+            'name' => 'Admin Spare Part Demo',
+            'email' => 'admin.sparepart@spareparts.test',
+        ]);
+        $adminSparePart->assignRole(UserRole::AdminSparePart->value);
+
+        $supervisor = User::factory()->create([
+            'name' => 'Supervisor Demo',
+            'email' => 'supervisor@spareparts.test',
+        ]);
+        $supervisor->assignRole(UserRole::Supervisor->value);
+
+        $engineer = User::factory()->create([
+            'name' => 'Engineer Demo',
+            'email' => 'engineer@spareparts.test',
+        ]);
+        $engineer->assignRole(UserRole::Engineer->value);
+
         $this->call(DemoDataSeeder::class);
 
         $superadmin->branches()->attach(Branch::all());
         $teknisi->branches()->attach(Branch::all());
+        $supervisor->branches()->attach(Branch::all());
+        $adminSparePart->branches()->attach(Branch::first());
+        $engineer->branches()->attach(Branch::first());
 
         // DemoDataSeeder's reactive/unscheduled tasks are created with no
         // assignee; hand them to the demo technician so their worklist

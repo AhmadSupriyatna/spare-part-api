@@ -50,7 +50,11 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
     Route::post('/part-units/{partUnit}/action-requests', [PublicPartUnitController::class, 'store']);
 });
 
-Route::middleware('auth:sanctum')->group(function () {
+// branch.access is a no-op for Superadmin/Supervisor and for any route whose
+// bound models don't resolve to a branch at all (global lists like
+// GET /parts, GET /tasks/mine) — safe to apply blanket-wide rather than
+// threading it into each sub-group below.
+Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'me']);
 
@@ -123,8 +127,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/cancel', [TaskController::class, 'cancel']);
     Route::post('/lines/{line}/runtime', [LineController::class, 'addRuntime']);
 
-    // Master data: only warehouse admin, supervisor, and superadmin can write.
-    Route::middleware('role:admin_gudang|supervisor|superadmin')->group(function () {
+    // Master data & inventory: Admin Spare Part is the broadest role day to
+    // day, but confined to their own branch by branch.access above; only
+    // Superadmin can act outside it. Supervisor is deliberately absent here
+    // — oversight (approve + view everywhere) but no master-data CRUD.
+    Route::middleware('role:admin_spare_part|superadmin')->group(function () {
         Route::apiResource('branches', BranchController::class)->only(['store', 'update', 'destroy']);
         Route::apiResource('parts', PartController::class)->only(['store', 'update', 'destroy']);
         Route::post('/units', [UnitController::class, 'store']);
@@ -162,25 +169,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/tasks/{task}', [TaskController::class, 'update']);
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
-        Route::post('/equipment/{equipment}/task-libraries', [TaskLibraryController::class, 'store']);
-        Route::put('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'update']);
-        Route::delete('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'destroy']);
-        Route::post('/task-libraries/{taskLibrary}/parts', [TaskLibraryPartController::class, 'store']);
-        Route::delete('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'destroy']);
-        Route::post('/task-libraries/{taskLibrary}/schedule', [TaskLibraryController::class, 'schedule']);
-
-        Route::get('/users', [UserController::class, 'index']);
-
-        Route::post('/reorder-requests/{reorderRequest}/approve', [ReorderRequestController::class, 'approve']);
-        Route::post('/reorder-requests/{reorderRequest}/mark-ordered', [ReorderRequestController::class, 'markOrdered']);
-        Route::post('/reorder-requests/{reorderRequest}/cancel', [ReorderRequestController::class, 'cancel']);
-
         Route::post('/parts/{part}/suppliers', [PartSupplierController::class, 'store']);
         Route::put('/part-suppliers/{partSupplier}', [PartSupplierController::class, 'update']);
         Route::delete('/part-suppliers/{partSupplier}', [PartSupplierController::class, 'destroy']);
-
-        Route::post('/equipment/{equipment}/parts', [EquipmentPartController::class, 'store']);
-        Route::delete('/equipment-parts/{equipmentPart}', [EquipmentPartController::class, 'destroy']);
 
         Route::post('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'store']);
         Route::post('/part-installations/{partInstallation}/remove', [PartInstallationController::class, 'remove']);
@@ -193,10 +184,39 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/part-repairs/{partRepair}', [PartRepairController::class, 'update']);
     });
 
-    // Breakdown replacement approval board: Engineer/Teknisi decide whether a
-    // QR-scanned replacement request goes through; supervisor/superadmin get
-    // the same oversight access they have everywhere else in the app.
-    Route::middleware('role:teknisi|engineer|supervisor|superadmin')->group(function () {
+    // BOM and Task Library (PM recipes): Engineer's turf alongside Admin
+    // Spare Part/Superadmin — this is the "kelola BOM/Task Library" slice of
+    // the Engineer role, distinct from (and narrower than) full master-data
+    // management above.
+    Route::middleware('role:admin_spare_part|engineer|superadmin')->group(function () {
+        Route::get('/users', [UserController::class, 'index']);
+
+        Route::post('/equipment/{equipment}/task-libraries', [TaskLibraryController::class, 'store']);
+        Route::put('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'update']);
+        Route::delete('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'destroy']);
+        Route::post('/task-libraries/{taskLibrary}/parts', [TaskLibraryPartController::class, 'store']);
+        Route::delete('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'destroy']);
+        Route::post('/task-libraries/{taskLibrary}/schedule', [TaskLibraryController::class, 'schedule']);
+
+        Route::post('/equipment/{equipment}/parts', [EquipmentPartController::class, 'store']);
+        Route::delete('/equipment-parts/{equipmentPart}', [EquipmentPartController::class, 'destroy']);
+    });
+
+    // Reorder request approvals: an "approve" action Supervisor keeps even
+    // though it sits outside their usual read-only oversight, alongside
+    // Admin Spare Part/Superadmin.
+    Route::middleware('role:admin_spare_part|supervisor|superadmin')->group(function () {
+        Route::post('/reorder-requests/{reorderRequest}/approve', [ReorderRequestController::class, 'approve']);
+        Route::post('/reorder-requests/{reorderRequest}/mark-ordered', [ReorderRequestController::class, 'markOrdered']);
+        Route::post('/reorder-requests/{reorderRequest}/cancel', [ReorderRequestController::class, 'cancel']);
+    });
+
+    // Breakdown replacement / part-unit-action approval boards: Engineer
+    // decides whether a QR-scanned field request goes through; Supervisor
+    // and Superadmin get the same oversight they have everywhere else.
+    // Teknisi does not approve — their role is limited to working and
+    // completing their own assigned tasks.
+    Route::middleware('role:engineer|supervisor|superadmin')->group(function () {
         Route::get('/branches/{branch}/replacement-requests', [PartReplacementRequestController::class, 'index']);
         Route::post('/replacement-requests/{partReplacementRequest}/approve', [PartReplacementRequestController::class, 'approve']);
         Route::post('/replacement-requests/{partReplacementRequest}/reject', [PartReplacementRequestController::class, 'reject']);
