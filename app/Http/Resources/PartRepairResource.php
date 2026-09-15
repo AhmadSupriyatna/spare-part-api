@@ -21,6 +21,19 @@ class PartRepairResource extends JsonResource
             'unit_code' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->unit_code),
             'part_name' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->part?->name),
             'part_installation_id' => $this->part_installation_id,
+            'item_master_no' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->part?->item_master_no),
+            'equipment_name' => $this->whenLoaded(
+                'partInstallation',
+                fn () => $this->partInstallation?->equipment?->name
+            ),
+            'machine_name' => $this->whenLoaded(
+                'partInstallation',
+                fn () => $this->partInstallation?->equipment?->machine?->name
+            ),
+            'line_name' => $this->whenLoaded(
+                'partInstallation',
+                fn () => $this->partInstallation?->equipment?->machine?->line?->name
+            ),
             'removed_at' => $this->removed_at,
             'disposition' => $this->disposition,
             'repaired_at' => $this->repaired_at,

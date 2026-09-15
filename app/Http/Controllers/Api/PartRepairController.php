@@ -10,10 +10,28 @@ use App\Http\Resources\PartRepairResource;
 use App\Models\PartRepair;
 use App\Models\PartUnit;
 use App\Services\PartLifecycleService;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PartRepairController extends Controller
 {
     public function __construct(private readonly PartLifecycleService $lifecycle) {}
+
+    /**
+     * Every repair record, company-wide (a PartUnit isn't tied to one
+     * branch — it can move between equipment on different branches over its
+     * life), optionally filtered to one disposition for a board-style view.
+     */
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $query = PartRepair::query()->with(['partUnit.part', 'partInstallation.equipment.machine.line']);
+
+        if ($disposition = $request->string('disposition')->toString()) {
+            $query->where('disposition', $disposition);
+        }
+
+        return PartRepairResource::collection($query->latest('removed_at')->get());
+    }
 
     /**
      * Open a repair record for a unit that's just been (or was previously)

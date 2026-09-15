@@ -107,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // install/repair history across equipment and repair cycles.
     Route::get('/parts/{part}/units', [PartUnitController::class, 'index']);
     Route::get('/part-units/{partUnit}', [PartUnitController::class, 'show']);
+    Route::get('/part-repairs', [PartRepairController::class, 'index']);
 
     // Any authenticated role can work their own tasks and log line runtime.
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
