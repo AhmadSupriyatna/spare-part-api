@@ -18,7 +18,22 @@ class AddLineRuntimeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'hours' => ['required', 'integer', 'min:1'],
+            // The technician reads the line's hour meter and reports the
+            // absolute value shown on it — not a delta — since that's what
+            // they can actually see. The server computes the delta against
+            // the last recorded reading (see LineController::addRuntime()).
+            'current_reading' => [
+                'required',
+                'integer',
+                'min:0',
+                function ($attribute, $value, $fail) {
+                    $line = $this->route('line');
+                    if ($line && $value < $line->runtime_hours) {
+                        $fail("Reading tidak boleh kurang dari jam operasi saat ini ({$line->runtime_hours} jam).");
+                    }
+                },
+            ],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

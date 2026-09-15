@@ -38,4 +38,9 @@ class ProductionLine extends Model
     {
         return $this->hasMany(Machine::class, 'line_id');
     }
+
+    public function runtimeLogs(): HasMany
+    {
+        return $this->hasMany(LineRuntimeLog::class, 'line_id')->latest();
+    }
 }

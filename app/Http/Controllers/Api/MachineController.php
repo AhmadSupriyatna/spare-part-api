@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DestroyWithPasswordRequest;
 use App\Http\Requests\StoreMachineRequest;
 use App\Http\Requests\UpdateMachineRequest;
 use App\Http\Resources\MachineResource;
@@ -37,7 +38,7 @@ class MachineController extends Controller
         return new MachineResource($machine);
     }
 
-    public function destroy(Machine $machine): Response
+    public function destroy(DestroyWithPasswordRequest $request, Machine $machine): Response
     {
         $machine->delete();
 

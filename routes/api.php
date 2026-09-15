@@ -81,6 +81,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     // Line > Machine > Equipment hierarchy: any authenticated role can read.
     Route::get('/branches/{branch}/lines', [LineController::class, 'index']);
     Route::get('/lines/{line}', [LineController::class, 'show']);
+    Route::get('/lines/{line}/runtime-logs', [LineController::class, 'runtimeLogs']);
     Route::get('/lines/{line}/machines', [MachineController::class, 'index']);
     Route::get('/machines/{machine}', [MachineController::class, 'show']);
     Route::get('/machines/{machine}/equipment', [EquipmentController::class, 'index']);

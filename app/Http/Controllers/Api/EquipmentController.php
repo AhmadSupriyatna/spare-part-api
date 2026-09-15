@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DestroyWithPasswordRequest;
 use App\Http\Requests\StoreEquipmentRequest;
 use App\Http\Requests\UpdateEquipmentRequest;
 use App\Http\Resources\EquipmentResource;
@@ -37,7 +38,7 @@ class EquipmentController extends Controller
         return new EquipmentResource($equipment);
     }
 
-    public function destroy(Equipment $equipment): Response
+    public function destroy(DestroyWithPasswordRequest $request, Equipment $equipment): Response
     {
         $equipment->delete();
 
