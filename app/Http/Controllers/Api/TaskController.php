@@ -24,15 +24,16 @@ class TaskController extends Controller
 
     /**
      * Every PM task ever scheduled, across the branch — whether it came from
-     * a Task Library recipe or a lifetime-worn-part flag (both leave a
-     * task_part_checks row; that's what marks a task as "PM", not
-     * task_library_id specifically, since lifetime-sourced tasks don't have
-     * one). Feeds the "WO Ledger" tab and the PM calendar.
+     * a Task Library recipe (task_library_id set, even if its checklist is
+     * empty — a valid "inspection only, nothing to replace" recipe) or a
+     * lifetime-worn-part flag (no task_library_id, but always leaves exactly
+     * one task_part_checks row). Feeds the "WO Ledger" tab and the PM
+     * calendar.
      */
     public function pmSchedule(Branch $branch): AnonymousResourceCollection
     {
         return TaskResource::collection(
-            Task::whereHas('partChecks')
+            Task::where(fn ($q) => $q->whereNotNull('task_library_id')->orWhereHas('partChecks'))
                 ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
                 ->with(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part'])
                 ->orderByDesc('due_date')
