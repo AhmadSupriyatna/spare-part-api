@@ -4,7 +4,6 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CompanySettingController;
 use App\Http\Controllers\Api\EquipmentController;
-use App\Http\Controllers\Api\EquipmentPartController;
 use App\Http\Controllers\Api\LineController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MachineController;
@@ -108,12 +107,10 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     Route::get('/branches/{branch}/pm-tasks', [TaskController::class, 'pmSchedule']);
     Route::get('/branches/{branch}/part-lifetime-alerts', [PartInstallationController::class, 'atRisk']);
 
-    // Part <-> Supplier (approved supplier list per part) and Part <-> Equipment
-    // (BOM) relations, plus part lifetime tracking: any authenticated role can read.
+    // Part <-> Supplier (approved supplier list per part) relation, plus part
+    // lifetime tracking: any authenticated role can read.
     Route::get('/parts/{part}/suppliers', [PartSupplierController::class, 'index']);
     Route::get('/suppliers/{supplier}/parts', [PartSupplierController::class, 'forSupplier']);
-    Route::get('/equipment/{equipment}/parts', [EquipmentPartController::class, 'index']);
-    Route::get('/parts/{part}/equipment', [EquipmentPartController::class, 'forPart']);
     Route::get('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'index']);
     Route::get('/parts/{part}/part-installations', [PartInstallationController::class, 'forPart']);
     Route::get('/locations/{location}/part-stocks', [PartStockController::class, 'forLocation']);
@@ -200,9 +197,6 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::post('/task-libraries/{taskLibrary}/parts', [TaskLibraryPartController::class, 'store']);
         Route::delete('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'destroy']);
         Route::post('/task-libraries/{taskLibrary}/schedule', [TaskLibraryController::class, 'schedule']);
-
-        Route::post('/equipment/{equipment}/parts', [EquipmentPartController::class, 'store']);
-        Route::delete('/equipment-parts/{equipmentPart}', [EquipmentPartController::class, 'destroy']);
     });
 
     // Reorder request approvals: an "approve" action Supervisor keeps even

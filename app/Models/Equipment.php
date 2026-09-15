@@ -46,11 +46,6 @@ class Equipment extends Model
         return $this->hasMany(TaskLibrary::class);
     }
 
-    public function equipmentParts(): HasMany
-    {
-        return $this->hasMany(EquipmentPart::class);
-    }
-
     public function partInstallations(): HasMany
     {
         return $this->hasMany(PartInstallation::class);

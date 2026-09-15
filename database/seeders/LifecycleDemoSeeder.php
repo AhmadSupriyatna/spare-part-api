@@ -8,8 +8,8 @@ use App\Enums\ReplacementRequestStatus;
 use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\Equipment;
-use App\Models\EquipmentPart;
 use App\Models\Part;
+use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
 use App\Models\PartSupplier;
@@ -27,7 +27,7 @@ use Throwable;
 
 /**
  * Populates every module built on top of the original DemoDataSeeder scaffold
- * with believable, internally-consistent sample data: BOM, approved
+ * with believable, internally-consistent sample data: approved
  * suppliers, a Task Library (PM recipe) with both a completed and an
  * upcoming schedule, a handful of PartUnit life cycles at different stages
  * (in service, available for reinstall, near end of life, scrapped), and a
@@ -69,16 +69,6 @@ class LifecycleDemoSeeder extends Seeder
 
             $primaryEquipment = $equipmentList->first();
             $secondaryEquipment = $equipmentList->count() > 1 ? $equipmentList[1] : $primaryEquipment;
-
-            // --- BOM: attach a few parts to each equipment ---
-            foreach ($equipmentList as $equipment) {
-                foreach ($parts->random(min(3, $parts->count())) as $part) {
-                    EquipmentPart::firstOrCreate(
-                        ['equipment_id' => $equipment->id, 'part_id' => $part->id],
-                        ['quantity_required' => fake()->numberBetween(1, 2)],
-                    );
-                }
-            }
 
             // --- Approved supplier list for a few parts ---
             foreach ($parts->take(3) as $index => $part) {
@@ -177,13 +167,19 @@ class LifecycleDemoSeeder extends Seeder
             $lifecycle->updateDisposition($scrapRepair, PartRepairDisposition::Scrapped, 'Tidak layak diperbaiki, dibuang sesuai kebijakan QA.');
 
             // --- Breakdown replacement requests: pending, approved, rejected ---
-            $bomPartId = EquipmentPart::where('equipment_id', $primaryEquipment->id)->value('part_id');
-            if ($bomPartId) {
-                PartStock::where('part_id', $bomPartId)->where('branch_id', $branch->id)
+            // Picks a part actually installed on $primaryEquipment right now
+            // (the cyclePart/wearPart installs above leave a couple active) —
+            // consistent with the breakdown scan flow itself now reading
+            // real installations instead of a separate BOM spec.
+            $installedPartId = PartInstallation::where('equipment_id', $primaryEquipment->id)
+                ->whereNull('removed_at')
+                ->value('part_id');
+            if ($installedPartId) {
+                PartStock::where('part_id', $installedPartId)->where('branch_id', $branch->id)
                     ->update(['quantity_on_hand' => 50]);
 
                 PartReplacementRequest::create([
-                    'part_id' => $bomPartId,
+                    'part_id' => $installedPartId,
                     'equipment_id' => $primaryEquipment->id,
                     'quantity_used' => 1,
                     'requested_by_name' => 'Joko (Operator Shift Malam)',
@@ -192,7 +188,7 @@ class LifecycleDemoSeeder extends Seeder
                 ]);
 
                 $approvedReq = PartReplacementRequest::create([
-                    'part_id' => $bomPartId,
+                    'part_id' => $installedPartId,
                     'equipment_id' => $primaryEquipment->id,
                     'quantity_used' => 1,
                     'requested_by_name' => 'Slamet (Operator Shift Pagi)',
@@ -205,7 +201,7 @@ class LifecycleDemoSeeder extends Seeder
                 }
 
                 $rejectedReq = PartReplacementRequest::create([
-                    'part_id' => $bomPartId,
+                    'part_id' => $installedPartId,
                     'equipment_id' => $primaryEquipment->id,
                     'quantity_used' => 5,
                     'requested_by_name' => 'Tono (Operator)',

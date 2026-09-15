@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\ScheduleType;
 use App\Enums\TaskStatus;
 use App\Exceptions\PartStockNotFoundException;
-use App\Models\EquipmentPart;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
@@ -163,8 +162,9 @@ class TaskService
      * equipment's branch stock and pre-fill the task's part_stock_id, so the
      * "what part does this PM use" knowledge set when the work order was
      * defined carries through to the actual task instead of being re-entered
-     * by whoever picks it up. The quantity defaults from the equipment's BOM
-     * (equipment_parts.quantity_required) when there's a matching entry.
+     * by whoever picks it up. Quantity is left for the technician to confirm
+     * at completion time (see TaskController::complete()'s part_stock_id/
+     * quantity_used override).
      */
     public function generateNextTask(WorkOrder $workOrder, ?Task $previousTask = null): Task
     {
@@ -181,7 +181,6 @@ class TaskService
         }
 
         $partStockId = null;
-        $quantityUsed = null;
 
         if ($workOrder->part_id) {
             $branchId = $workOrder->equipment->machine->line->branch_id;
@@ -189,12 +188,6 @@ class TaskService
             $partStockId = PartStock::where('part_id', $workOrder->part_id)
                 ->where('branch_id', $branchId)
                 ->value('id');
-
-            if ($partStockId) {
-                $quantityUsed = EquipmentPart::where('equipment_id', $workOrder->equipment_id)
-                    ->where('part_id', $workOrder->part_id)
-                    ->value('quantity_required');
-            }
         }
 
         return Task::create([
@@ -206,7 +199,7 @@ class TaskService
             'due_date' => $dueDate,
             'due_runtime_hours' => $dueRuntimeHours,
             'part_stock_id' => $partStockId,
-            'quantity_used' => $quantityUsed,
+            'quantity_used' => null,
         ]);
     }
 }

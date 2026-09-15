@@ -42,11 +42,6 @@ class Part extends Model
         return $this->hasMany(PartSupplier::class);
     }
 
-    public function equipmentParts(): HasMany
-    {
-        return $this->hasMany(EquipmentPart::class);
-    }
-
     public function installations(): HasMany
     {
         return $this->hasMany(PartInstallation::class);
