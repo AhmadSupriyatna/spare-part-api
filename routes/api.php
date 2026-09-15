@@ -174,6 +174,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::delete('/part-suppliers/{partSupplier}', [PartSupplierController::class, 'destroy']);
 
         Route::post('/equipment/{equipment}/part-installations', [PartInstallationController::class, 'store']);
+        Route::put('/part-installations/{partInstallation}', [PartInstallationController::class, 'update']);
         Route::post('/part-installations/{partInstallation}/remove', [PartInstallationController::class, 'remove']);
         Route::post(
             '/part-installations/{partInstallation}/schedule-replacement',

@@ -6,6 +6,7 @@ use App\Exceptions\PartUnitAlreadyInstalledException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ScheduleLifetimeReplacementRequest;
 use App\Http\Requests\StorePartInstallationRequest;
+use App\Http\Requests\UpdatePartInstallationRequest;
 use App\Http\Resources\PartInstallationResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Branch;
@@ -103,5 +104,14 @@ class PartInstallationController extends Controller
         $installation = $this->lifecycle->remove($partInstallation);
 
         return new PartInstallationResource($installation->load(['part', 'partUnit', 'installedBy']));
+    }
+
+    public function update(
+        UpdatePartInstallationRequest $request,
+        PartInstallation $partInstallation
+    ): PartInstallationResource {
+        $partInstallation->update($request->validated());
+
+        return new PartInstallationResource($partInstallation->load(['part', 'partUnit', 'installedBy']));
     }
 }
