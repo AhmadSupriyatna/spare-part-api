@@ -80,7 +80,7 @@ class LineController extends Controller
     public function runtimeLogs(ProductionLine $line): AnonymousResourceCollection
     {
         return LineRuntimeLogResource::collection(
-            $line->runtimeLogs()->with('recordedBy')->get()
+            $line->runtimeLogs()->with('recordedBy')->paginate(10)
         );
     }
 }
