@@ -46,5 +46,10 @@ class DatabaseSeeder extends Seeder
         // assignee; hand them to the demo technician so their worklist
         // ("Tugas Saya") has something in it out of the box.
         Task::whereNull('assigned_to')->update(['assigned_to' => $teknisi->id]);
+
+        // Runs after branches are attached and equipment/parts exist, since it
+        // populates BOM, Task Library/PM schedules, part-unit repair cycles,
+        // and breakdown/part-unit-action requests on top of that base data.
+        $this->call(LifecycleDemoSeeder::class);
     }
 }
