@@ -2,11 +2,9 @@
 
 namespace App\Services;
 
-use App\Enums\TaskStatus;
 use App\Models\CompanySetting;
 use App\Models\PartInstallation;
 use App\Models\ProductionLine;
-use App\Models\Task;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -62,7 +60,7 @@ class PartLifetimeService
             ->filter(fn (PartInstallation $installation) => ($installation->percentUsed() ?? 0) >= self::AT_RISK_THRESHOLD_PERCENT);
 
         foreach ($installations as $installation) {
-            if ($this->hasOpenLifetimeTask($installation)) {
+            if ($installation->hasOpenLifetimeTask()) {
                 continue;
             }
 
@@ -72,16 +70,6 @@ class PartLifetimeService
                 null,
             );
         }
-    }
-
-    private function hasOpenLifetimeTask(PartInstallation $installation): bool
-    {
-        return Task::query()
-            ->where('equipment_id', $installation->equipment_id)
-            ->whereNull('task_library_id')
-            ->whereHas('partChecks', fn ($q) => $q->where('part_id', $installation->part_id))
-            ->whereIn('status', [TaskStatus::Pending, TaskStatus::InProgress])
-            ->exists();
     }
 
     /**

@@ -15,6 +15,7 @@ use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Task;
 use App\Models\TaskReschedule;
+use App\Services\PmSchedulingService;
 use App\Services\TaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,16 +25,11 @@ use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
-    public function __construct(private readonly TaskService $tasks) {}
+    public function __construct(
+        private readonly TaskService $tasks,
+        private readonly PmSchedulingService $scheduling,
+    ) {}
 
-    /**
-     * Every PM task ever scheduled, across the branch — whether it came from
-     * a Task Library recipe (task_library_id set, even if its checklist is
-     * empty — a valid "inspection only, nothing to replace" recipe) or a
-     * lifetime-worn-part flag (no task_library_id, but always leaves exactly
-     * one task_part_checks row). Feeds the "WO Ledger" tab and the PM
-     * calendar.
-     */
     /**
      * Every reschedule action ever recorded for a PM task in this branch,
      * newest first — the "Riwayat Reschedule" list below the PM calendar.
@@ -53,8 +49,20 @@ class TaskController extends Controller
         );
     }
 
+    /**
+     * Every PM task ever scheduled, across the branch — whether it came from
+     * a Task Library recipe (task_library_id set, even if its checklist is
+     * empty — a valid "inspection only, nothing to replace" recipe) or a
+     * lifetime-worn-part flag (no task_library_id, but always leaves exactly
+     * one task_part_checks row). Feeds the "WO Ledger" tab and the PM
+     * calendar. Also the trigger point for Weekly/Monthly Task Library
+     * auto-recurrence, since there's no real cron running in local dev —
+     * every page load "catches up" any missing current-period occurrence.
+     */
     public function pmSchedule(Branch $branch): AnonymousResourceCollection
     {
+        $this->scheduling->ensureRecurringSchedules($branch);
+
         return TaskResource::collection(
             Task::where(fn ($q) => $q->whereNotNull('task_library_id')->orWhereHas('partChecks'))
                 ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))

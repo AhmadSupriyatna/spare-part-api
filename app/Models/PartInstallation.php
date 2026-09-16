@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\TaskStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -97,5 +98,23 @@ class PartInstallation extends Model
     public function percentUsed(): ?int
     {
         return $this->partUnit?->percentUsed();
+    }
+
+    /**
+     * Whether a Part Lifetime-sourced PM task already covers this
+     * equipment+part pair — shown as a "sudah dijadwalkan" indicator
+     * wherever percentUsed()/at-risk status is displayed (Line Equipment's
+     * InstalledPartsPanel, the Part Lifetime page), so it's clear at a
+     * glance whether PartLifetimeService::autoScheduleAtRisk() already
+     * handled this one.
+     */
+    public function hasOpenLifetimeTask(): bool
+    {
+        return Task::query()
+            ->where('equipment_id', $this->equipment_id)
+            ->whereNull('task_library_id')
+            ->whereHas('partChecks', fn ($q) => $q->where('part_id', $this->part_id))
+            ->whereIn('status', [TaskStatus::Pending, TaskStatus::InProgress])
+            ->exists();
     }
 }

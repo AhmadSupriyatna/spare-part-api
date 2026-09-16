@@ -46,6 +46,7 @@ class PartInstallationResource extends JsonResource
             'expected_interval_days' => $workOrder?->interval_days,
             'expected_interval_hours' => $workOrder?->interval_hours,
             'percent_used' => $percentUsed,
+            'has_scheduled_lifetime_task' => $this->isActive() ? $this->hasOpenLifetimeTask() : false,
         ];
     }
 }
