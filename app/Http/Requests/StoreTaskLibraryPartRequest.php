@@ -13,6 +13,11 @@ class StoreTaskLibraryPartRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->mergeIfMissing(['needs_replacement' => false]);
+    }
+
     /**
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -20,11 +25,18 @@ class StoreTaskLibraryPartRequest extends FormRequest
     {
         return [
             'part_id' => [
-                'required', 'integer', 'exists:parts,id',
+                'required', 'integer',
+                Rule::exists('part_installations', 'part_id')->where(
+                    fn ($q) => $q
+                        ->where('equipment_id', $this->route('taskLibrary')?->equipment_id)
+                        ->whereNull('removed_at')
+                ),
                 Rule::unique('task_library_parts', 'part_id')
                     ->where('task_library_id', $this->route('taskLibrary')?->id),
             ],
-            'quantity_required' => ['required', 'integer', 'min:1'],
+            'action' => ['required', 'in:inspection,lubrication'],
+            'needs_replacement' => ['sometimes', 'boolean'],
+            'quantity_required' => ['sometimes', 'integer', 'min:1'],
             'notes' => ['nullable', 'string'],
         ];
     }
