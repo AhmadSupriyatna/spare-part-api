@@ -47,8 +47,7 @@ class PartLifetimeService
      * auto-creates a PM task for any that just crossed the at-risk
      * threshold and doesn't already have one pending/in progress — called
      * after a runtime-hours update, since that's the only thing that can
-     * push percentUsed() up. Silently does nothing for installations with
-     * no PartUnit/estimated_lifetime_hours (percentUsed() is null there).
+     * push percentUsed() up for parts on this specific line.
      */
     public function autoScheduleAtRisk(ProductionLine $line): void
     {
@@ -59,6 +58,29 @@ class PartLifetimeService
             ->get()
             ->filter(fn (PartInstallation $installation) => ($installation->percentUsed() ?? 0) >= self::AT_RISK_THRESHOLD_PERCENT);
 
+        $this->createMissingLifetimeTasks($installations);
+    }
+
+    /**
+     * Same as autoScheduleAtRisk(), but for every at-risk installation in a
+     * whole branch — catches anything that crossed the threshold before
+     * this feature existed, or whose auto-created task was since deleted/
+     * completed without a fresh runtime-hours update to re-trigger the
+     * line-scoped check. Called on every Part Lifetime / PM Schedule page
+     * load so an at-risk-but-unscheduled part never just sits there
+     * unexplained — viewing either page is what "catches up" the schedule,
+     * same idea as PmSchedulingService::ensureRecurringSchedules().
+     */
+    public function autoScheduleAllAtRisk(int $branchId): void
+    {
+        $this->createMissingLifetimeTasks($this->atRiskInstallations($branchId));
+    }
+
+    /**
+     * @param  Collection<int, PartInstallation>  $installations
+     */
+    private function createMissingLifetimeTasks(Collection $installations): void
+    {
         foreach ($installations as $installation) {
             if ($installation->hasOpenLifetimeTask()) {
                 continue;

@@ -15,6 +15,7 @@ use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Task;
 use App\Models\TaskReschedule;
+use App\Services\PartLifetimeService;
 use App\Services\PmSchedulingService;
 use App\Services\TaskService;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,7 @@ class TaskController extends Controller
     public function __construct(
         private readonly TaskService $tasks,
         private readonly PmSchedulingService $scheduling,
+        private readonly PartLifetimeService $lifetime,
     ) {}
 
     /**
@@ -56,12 +58,14 @@ class TaskController extends Controller
      * lifetime-worn-part flag (no task_library_id, but always leaves exactly
      * one task_part_checks row). Feeds the "WO Ledger" tab and the PM
      * calendar. Also the trigger point for Weekly/Monthly Task Library
-     * auto-recurrence, since there's no real cron running in local dev —
-     * every page load "catches up" any missing current-period occurrence.
+     * auto-recurrence and Part Lifetime auto-scheduling, since there's no
+     * real cron running in local dev — every page load "catches up" any
+     * missing occurrence for either source.
      */
     public function pmSchedule(Branch $branch): AnonymousResourceCollection
     {
         $this->scheduling->ensureRecurringSchedules($branch);
+        $this->lifetime->autoScheduleAllAtRisk($branch->id);
 
         return TaskResource::collection(
             Task::where(fn ($q) => $q->whereNotNull('task_library_id')->orWhereHas('partChecks'))

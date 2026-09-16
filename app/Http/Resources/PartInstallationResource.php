@@ -19,6 +19,8 @@ class PartInstallationResource extends JsonResource
         $ageInDays = $this->ageInDays();
         $ageInRuntimeHours = $this->ageInRuntimeHours();
         $percentUsed = $this->percentUsed();
+        $totalRuntimeHoursUsed = $this->partUnit?->totalRuntimeHoursUsed();
+        $remainingHours = $this->partUnit?->remainingHours();
 
         return [
             'id' => $this->id,
@@ -46,6 +48,8 @@ class PartInstallationResource extends JsonResource
             'expected_interval_days' => $workOrder?->interval_days,
             'expected_interval_hours' => $workOrder?->interval_hours,
             'percent_used' => $percentUsed,
+            'total_runtime_hours_used' => $totalRuntimeHoursUsed,
+            'remaining_hours' => $remainingHours,
             'has_scheduled_lifetime_task' => $this->isActive() ? $this->hasOpenLifetimeTask() : false,
         ];
     }

@@ -34,6 +34,8 @@ class PartInstallationController extends Controller
      */
     public function atRisk(Branch $branch): AnonymousResourceCollection
     {
+        $this->lifetime->autoScheduleAllAtRisk($branch->id);
+
         return PartInstallationResource::collection($this->lifetime->atRiskInstallations($branch->id));
     }
 
