@@ -94,6 +94,22 @@ class PartUnit extends Model
     }
 
     /**
+     * Hours of estimated lifetime left before this unit is fully worn —
+     * null under the same condition as percentUsed() (no estimate to
+     * compare against). Feeds the PM auto-schedule due-date calculation.
+     */
+    public function remainingHours(): ?int
+    {
+        $estimatedHours = $this->part->estimated_lifetime_hours;
+
+        if (! $estimatedHours) {
+            return null;
+        }
+
+        return max(0, $estimatedHours - $this->totalRuntimeHoursUsed());
+    }
+
+    /**
      * Every equipment this unit has ever been installed on, in order.
      */
     public function equipmentHistory(): array

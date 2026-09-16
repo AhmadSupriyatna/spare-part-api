@@ -12,12 +12,15 @@ use App\Http\Resources\LineRuntimeLogResource;
 use App\Models\Branch;
 use App\Models\LineRuntimeLog;
 use App\Models\ProductionLine;
+use App\Services\PartLifetimeService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
 class LineController extends Controller
 {
+    public function __construct(private readonly PartLifetimeService $lifetime) {}
+
     public function index(Branch $branch): AnonymousResourceCollection
     {
         return LineResource::collection($branch->lines()->orderBy('name')->get());
@@ -73,6 +76,8 @@ class LineController extends Controller
 
             $locked->update(['runtime_hours' => $data['current_reading']]);
         });
+
+        $this->lifetime->autoScheduleAtRisk($line);
 
         return new LineResource($line->fresh());
     }

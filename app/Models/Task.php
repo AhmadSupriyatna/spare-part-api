@@ -57,6 +57,11 @@ class Task extends Model
         return $this->hasMany(TaskPartCheck::class);
     }
 
+    public function reschedules(): HasMany
+    {
+        return $this->hasMany(TaskReschedule::class)->latest();
+    }
+
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(Equipment::class);

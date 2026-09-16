@@ -6,17 +6,21 @@ use App\Exceptions\PartStockNotFoundException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelTaskRequest;
 use App\Http\Requests\CompleteTaskRequest;
+use App\Http\Requests\RescheduleTaskRequest;
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
+use App\Http\Resources\TaskRescheduleResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Task;
+use App\Models\TaskReschedule;
 use App\Services\TaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
@@ -30,6 +34,25 @@ class TaskController extends Controller
      * one task_part_checks row). Feeds the "WO Ledger" tab and the PM
      * calendar.
      */
+    /**
+     * Every reschedule action ever recorded for a PM task in this branch,
+     * newest first — the "Riwayat Reschedule" list below the PM calendar.
+     */
+    public function rescheduleHistory(Branch $branch): AnonymousResourceCollection
+    {
+        return TaskRescheduleResource::collection(
+            TaskReschedule::query()
+                ->whereHas(
+                    'task',
+                    fn ($q) => $q->where(fn ($q2) => $q2->whereNotNull('task_library_id')->orWhereHas('partChecks'))
+                        ->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branch->id))
+                )
+                ->with(['task.equipment', 'rescheduledBy'])
+                ->latest()
+                ->get()
+        );
+    }
+
     public function pmSchedule(Branch $branch): AnonymousResourceCollection
     {
         return TaskResource::collection(
@@ -93,6 +116,34 @@ class TaskController extends Controller
         $task->update($request->validated());
 
         return new TaskResource($task);
+    }
+
+    /**
+     * Drag-to-reschedule on the PM calendar — unlike update(), this always
+     * leaves a TaskReschedule log entry (previous date, new date, reason)
+     * instead of silently overwriting due_date.
+     */
+    public function reschedule(RescheduleTaskRequest $request, Task $task): TaskResource
+    {
+        $data = $request->validated();
+
+        $updated = DB::transaction(function () use ($task, $data, $request) {
+            TaskReschedule::create([
+                'task_id' => $task->id,
+                'previous_due_date' => $task->due_date,
+                'new_due_date' => $data['due_date'],
+                'reason' => $data['reason'] ?? null,
+                'rescheduled_by' => $request->user()->id,
+            ]);
+
+            $task->update(['due_date' => $data['due_date']]);
+
+            return $task->fresh();
+        });
+
+        return new TaskResource(
+            $updated->load(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part'])
+        );
     }
 
     public function start(Request $request, Task $task): TaskResource

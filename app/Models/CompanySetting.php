@@ -14,7 +14,15 @@ class CompanySetting extends Model
     protected $fillable = [
         'name',
         'logo_path',
+        'avg_weekly_operating_hours',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'avg_weekly_operating_hours' => 'integer',
+        ];
+    }
 
     public static function current(): self
     {

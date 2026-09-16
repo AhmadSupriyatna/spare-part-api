@@ -19,6 +19,7 @@ class CompanySettingResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'logo_url' => $this->logoUrl(),
+            'avg_weekly_operating_hours' => $this->avg_weekly_operating_hours,
         ];
     }
 }

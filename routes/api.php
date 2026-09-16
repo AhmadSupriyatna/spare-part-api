@@ -105,6 +105,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     Route::get('/branches/{branch}/task-libraries', [TaskLibraryController::class, 'indexForBranch']);
     Route::get('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'show']);
     Route::get('/branches/{branch}/pm-tasks', [TaskController::class, 'pmSchedule']);
+    Route::get('/branches/{branch}/task-reschedules', [TaskController::class, 'rescheduleHistory']);
     Route::get('/branches/{branch}/part-lifetime-alerts', [PartInstallationController::class, 'atRisk']);
 
     // Part <-> Supplier (approved supplier list per part) relation, plus part
@@ -167,6 +168,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
 
         Route::post('/equipment/{equipment}/tasks', [TaskController::class, 'store']);
         Route::put('/tasks/{task}', [TaskController::class, 'update']);
+        Route::put('/tasks/{task}/reschedule', [TaskController::class, 'reschedule']);
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
         Route::post('/parts/{part}/suppliers', [PartSupplierController::class, 'store']);

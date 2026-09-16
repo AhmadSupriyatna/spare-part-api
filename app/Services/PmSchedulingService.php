@@ -57,7 +57,7 @@ class PmSchedulingService
                 'equipment_id' => $installation->equipment_id,
                 'assigned_to' => $assignedTo,
                 'title' => "Ganti {$installation->part->name} (Umur Pakai Habis)",
-                'description' => 'Dijadwalkan karena sisa umur pakai part ini sudah di bawah 10%.',
+                'description' => 'Dijadwalkan karena sisa umur pakai part ini sudah di bawah 20%.',
                 'status' => TaskStatus::Pending,
                 'due_date' => $dueDate,
             ]);

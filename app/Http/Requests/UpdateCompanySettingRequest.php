@@ -20,6 +20,7 @@ class UpdateCompanySettingRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'logo' => ['nullable', 'image', 'max:2048'],
+            'avg_weekly_operating_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
         ];
     }
 }
