@@ -21,7 +21,6 @@ class TaskLibraryPartResource extends JsonResource
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
-            'needs_replacement' => $this->needs_replacement,
             'quantity_required' => $this->quantity_required,
             'notes' => $this->notes,
         ];

@@ -10,7 +10,6 @@ class TaskLibraryPart extends Model
     protected $fillable = [
         'task_library_id',
         'part_id',
-        'needs_replacement',
         'quantity_required',
         'notes',
     ];
@@ -18,7 +17,6 @@ class TaskLibraryPart extends Model
     protected function casts(): array
     {
         return [
-            'needs_replacement' => 'boolean',
             'quantity_required' => 'integer',
         ];
     }

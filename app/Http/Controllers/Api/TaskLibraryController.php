@@ -23,7 +23,7 @@ class TaskLibraryController extends Controller
     public function index(Equipment $equipment): AnonymousResourceCollection
     {
         return TaskLibraryResource::collection(
-            $equipment->taskLibraries()->with(['equipment.machine.line', 'parts.part'])->get()
+            $equipment->taskLibraries()->with(['equipment.machine.line', 'parts.part'])->orderBy('id')->get()
         );
     }
 
@@ -38,6 +38,7 @@ class TaskLibraryController extends Controller
             TaskLibrary::whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
                 ->where('is_active', true)
                 ->with(['equipment.machine.line', 'parts.part'])
+                ->orderBy('id')
                 ->get()
         );
     }
@@ -61,10 +62,7 @@ class TaskLibraryController extends Controller
             $library = $equipment->taskLibraries()->create($data);
 
             foreach ($partsData as $partData) {
-                $library->parts()->create([
-                    'part_id' => $partData['part_id'],
-                    'needs_replacement' => $partData['needs_replacement'] ?? false,
-                ]);
+                $library->parts()->create(['part_id' => $partData['part_id']]);
             }
 
             return $library;

@@ -13,11 +13,6 @@ class StoreTaskLibraryPartRequest extends FormRequest
         return true;
     }
 
-    protected function prepareForValidation(): void
-    {
-        $this->mergeIfMissing(['needs_replacement' => false]);
-    }
-
     /**
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -34,7 +29,6 @@ class StoreTaskLibraryPartRequest extends FormRequest
                 Rule::unique('task_library_parts', 'part_id')
                     ->where('task_library_id', $this->route('taskLibrary')?->id),
             ],
-            'needs_replacement' => ['sometimes', 'boolean'],
             'quantity_required' => ['sometimes', 'integer', 'min:1'],
             'notes' => ['nullable', 'string'],
         ];
