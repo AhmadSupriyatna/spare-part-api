@@ -34,7 +34,6 @@ class StoreTaskLibraryPartRequest extends FormRequest
                 Rule::unique('task_library_parts', 'part_id')
                     ->where('task_library_id', $this->route('taskLibrary')?->id),
             ],
-            'action' => ['required', 'in:inspection,lubrication'],
             'needs_replacement' => ['sometimes', 'boolean'],
             'quantity_required' => ['sometimes', 'integer', 'min:1'],
             'notes' => ['nullable', 'string'],

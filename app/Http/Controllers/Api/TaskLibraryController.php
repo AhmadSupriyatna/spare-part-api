@@ -63,7 +63,6 @@ class TaskLibraryController extends Controller
             foreach ($partsData as $partData) {
                 $library->parts()->create([
                     'part_id' => $partData['part_id'],
-                    'action' => $partData['action'],
                     'needs_replacement' => $partData['needs_replacement'] ?? false,
                 ]);
             }
