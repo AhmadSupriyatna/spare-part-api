@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Task;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -17,7 +18,7 @@ class CompleteTaskRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var \App\Models\Task|null $task */
+        /** @var Task|null $task */
         $task = $this->route('task');
 
         // PM tasks — scheduled from either a Task Library recipe or a
@@ -39,6 +40,8 @@ class CompleteTaskRequest extends FormRequest
                     'nullable', 'string', 'max:1000',
                     'required_if:checks.*.is_replaced,false',
                 ],
+                'checks.*.part_unit_id' => ['nullable', 'integer', 'exists:part_units,id'],
+                'checks.*.old_installation_id' => ['nullable', 'integer', 'exists:part_installations,id'],
             ];
         }
 

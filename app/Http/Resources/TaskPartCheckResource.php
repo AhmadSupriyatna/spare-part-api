@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\TaskPartCheck;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\TaskPartCheck
+ * @mixin TaskPartCheck
  */
 class TaskPartCheckResource extends JsonResource
 {
@@ -24,6 +25,7 @@ class TaskPartCheckResource extends JsonResource
             'is_replaced' => $this->is_replaced,
             'quantity_used' => $this->quantity_used,
             'reason' => $this->reason,
+            'part_installation_id' => $this->part_installation_id,
         ];
     }
 }

@@ -14,6 +14,7 @@ class TaskPartCheck extends Model
         'is_replaced',
         'quantity_used',
         'reason',
+        'part_installation_id',
     ];
 
     protected function casts(): array
@@ -33,5 +34,10 @@ class TaskPartCheck extends Model
     public function part(): BelongsTo
     {
         return $this->belongsTo(Part::class);
+    }
+
+    public function partInstallation(): BelongsTo
+    {
+        return $this->belongsTo(PartInstallation::class);
     }
 }

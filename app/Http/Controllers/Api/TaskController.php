@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\PartStockNotFoundException;
+use App\Exceptions\PartUnitAlreadyInstalledException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelTaskRequest;
 use App\Http\Requests\CompleteTaskRequest;
@@ -179,7 +181,7 @@ class TaskController extends Controller
                 quantityUsed: $data['quantity_used'] ?? null,
                 checks: $data['checks'] ?? null,
             );
-        } catch (PartStockNotFoundException $e) {
+        } catch (PartStockNotFoundException|PartUnitAlreadyInstalledException|AmbiguousInstallationException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
