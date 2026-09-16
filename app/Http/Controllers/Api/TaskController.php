@@ -52,12 +52,11 @@ class TaskController extends Controller
     }
 
     /**
-     * Every PM task ever scheduled, across the branch — whether it came from
-     * a Task Library recipe (task_library_id set, even if its checklist is
-     * empty — a valid "inspection only, nothing to replace" recipe) or a
-     * lifetime-worn-part flag (no task_library_id, but always leaves exactly
-     * one task_part_checks row). Feeds the "WO Ledger" tab and the PM
-     * calendar. Also the trigger point for Weekly/Monthly Task Library
+     * Every task in the branch, regardless of source — Task Library recipe
+     * (task_library_id set), Part Lifetime-worn flag (no task_library_id,
+     * but always leaves a task_part_checks row), or ad-hoc/breakdown
+     * (neither). Feeds the single Maintenance page (Calendar + List WO
+     * views). Also the trigger point for Weekly/Monthly Task Library
      * auto-recurrence and Part Lifetime auto-scheduling, since there's no
      * real cron running in local dev — every page load "catches up" any
      * missing occurrence for either source.
@@ -68,7 +67,7 @@ class TaskController extends Controller
         $this->lifetime->autoScheduleAllAtRisk($branch->id);
 
         return TaskResource::collection(
-            Task::where(fn ($q) => $q->whereNotNull('task_library_id')->orWhereHas('partChecks'))
+            Task::query()
                 ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
                 ->with(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part'])
                 ->orderByDesc('due_date')
