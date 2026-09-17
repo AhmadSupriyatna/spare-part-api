@@ -5,8 +5,11 @@ namespace App\Services;
 use App\Models\CompanySetting;
 use App\Models\PartInstallation;
 use App\Models\ProductionLine;
+use App\Models\Task;
+use App\Models\TaskReschedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Surfaces installed parts whose remaining usable life has dropped below a
@@ -43,11 +46,13 @@ class PartLifetimeService
     }
 
     /**
-     * Checks every active installation on this line's equipment and
-     * auto-creates a PM task for any that just crossed the at-risk
-     * threshold and doesn't already have one pending/in progress — called
-     * after a runtime-hours update, since that's the only thing that can
-     * push percentUsed() up for parts on this specific line.
+     * Checks every active installation on this line's equipment and, for
+     * any at-risk one, either creates its PM task or — if one's already
+     * open — recomputes and updates its due date. Called after a
+     * runtime-hours update, since that's the only thing that can push
+     * percentUsed() up for parts on this specific line, and the user
+     * explicitly asked for the schedule to stay live against that input
+     * rather than freezing at whatever the first estimate was.
      */
     public function autoScheduleAtRisk(ProductionLine $line): void
     {
@@ -58,7 +63,7 @@ class PartLifetimeService
             ->get()
             ->filter(fn (PartInstallation $installation) => ($installation->percentUsed() ?? 0) >= self::AT_RISK_THRESHOLD_PERCENT);
 
-        $this->createMissingLifetimeTasks($installations);
+        $this->createOrRescheduleLifetimeTasks($installations);
     }
 
     /**
@@ -77,6 +82,15 @@ class PartLifetimeService
     }
 
     /**
+     * Create-only: used by the page-view catch-up path
+     * (autoScheduleAllAtRisk), which must stay idempotent no-op for an
+     * installation that already has a task — otherwise just opening the PM
+     * Schedule/Part Lifetime page on a later day would keep nudging the due
+     * date forward (computeAutoScheduleDueDate() is anchored to "now") with
+     * no real new runtime-hours data behind it. Only the runtime-hours-
+     * triggered path (createOrRescheduleLifetimeTasks(), below) is allowed
+     * to move an existing task's date.
+     *
      * @param  Collection<int, PartInstallation>  $installations
      */
     private function createMissingLifetimeTasks(Collection $installations): void
@@ -92,6 +106,54 @@ class PartLifetimeService
                 null,
             );
         }
+    }
+
+    /**
+     * @param  Collection<int, PartInstallation>  $installations
+     */
+    private function createOrRescheduleLifetimeTasks(Collection $installations): void
+    {
+        foreach ($installations as $installation) {
+            $newDueDate = $this->computeAutoScheduleDueDate($installation)->toDateString();
+            $existingTask = $installation->openLifetimeTask();
+
+            if ($existingTask) {
+                $this->rescheduleIfChanged($existingTask, $newDueDate);
+
+                continue;
+            }
+
+            $this->scheduling->scheduleFromLifetime($installation, $newDueDate, null);
+        }
+    }
+
+    /**
+     * Keeps an already-scheduled Part Lifetime task's due date live as new
+     * runtime-hours data comes in, instead of freezing it at whatever the
+     * first estimate happened to be — every update is logged as a
+     * TaskReschedule row (rescheduled_by null marks it as system-driven,
+     * not a human drag) so the "kenapa tanggalnya berubah" trail stays
+     * visible in the same "Riwayat Reschedule" list as manual reschedules.
+     */
+    private function rescheduleIfChanged(Task $task, string $newDueDate): void
+    {
+        $previousDueDate = $task->due_date?->toDateString();
+
+        if ($previousDueDate === $newDueDate) {
+            return;
+        }
+
+        DB::transaction(function () use ($task, $previousDueDate, $newDueDate) {
+            TaskReschedule::create([
+                'task_id' => $task->id,
+                'previous_due_date' => $previousDueDate,
+                'new_due_date' => $newDueDate,
+                'reason' => 'Disesuaikan otomatis dari data jam operasi terbaru.',
+                'rescheduled_by' => null,
+            ]);
+
+            $task->update(['due_date' => $newDueDate]);
+        });
     }
 
     /**

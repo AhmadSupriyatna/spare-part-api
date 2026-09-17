@@ -19,6 +19,7 @@ class StorePartRepairRequest extends FormRequest
     {
         return [
             'part_installation_id' => ['nullable', 'integer', 'exists:part_installations,id'],
+            'estimated_completion_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
         ];
     }

@@ -6,7 +6,6 @@ use App\Enums\ScheduleType;
 use App\Enums\TaskStatus;
 use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\PartStockNotFoundException;
-use App\Models\PartInstallation;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
@@ -151,7 +150,11 @@ class TaskService
                     );
                 }
 
-                $oldInstallation = $this->resolveOldInstallation($task, $check);
+                $oldInstallation = $this->lifecycle->resolveActiveInstallation(
+                    $task->equipment,
+                    $check['part_id'],
+                    $check['old_installation_id'] ?? null,
+                );
 
                 if ($oldInstallation) {
                     $this->lifecycle->remove($oldInstallation);
@@ -170,36 +173,6 @@ class TaskService
                 'part_installation_id' => $installation?->id,
             ]);
         }
-    }
-
-    /**
-     * Figure out which existing installation of this part (if any) the
-     * replacement is closing out. An explicit old_installation_id always
-     * wins; otherwise this only auto-resolves when the equipment has at
-     * most one active installation of that part — more than one is
-     * ambiguous and the caller (technician, via the scan UI) must say
-     * which unit is coming off.
-     *
-     * @param  array{part_id: int, old_installation_id?: ?int}  $check
-     *
-     * @throws AmbiguousInstallationException
-     */
-    private function resolveOldInstallation(Task $task, array $check): ?PartInstallation
-    {
-        if (! empty($check['old_installation_id'])) {
-            return PartInstallation::whereKey($check['old_installation_id'])->first();
-        }
-
-        $active = $task->equipment->partInstallations()
-            ->where('part_id', $check['part_id'])
-            ->whereNull('removed_at')
-            ->get();
-
-        if ($active->count() > 1) {
-            throw new AmbiguousInstallationException($check['part_id']);
-        }
-
-        return $active->first();
     }
 
     public function cancel(Task $task, ?string $notes = null): Task

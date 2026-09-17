@@ -19,6 +19,7 @@ class ReviewReplacementRequestRequest extends FormRequest
     {
         return [
             'notes' => ['nullable', 'string', 'max:1000'],
+            'old_installation_id' => ['nullable', 'integer', 'exists:part_installations,id'],
         ];
     }
 }

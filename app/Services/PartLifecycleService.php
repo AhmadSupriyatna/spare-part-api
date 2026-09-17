@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\PartRepairDisposition;
 use App\Enums\PartUnitStatus;
+use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\PartUnitAlreadyInstalledException;
 use App\Models\Equipment;
 use App\Models\PartInstallation;
@@ -65,6 +66,36 @@ class PartLifecycleService
         });
     }
 
+    /**
+     * Figure out which currently-active installation of a part on an
+     * equipment (if any) is being closed out by a new install — shared by
+     * every jalur keluar (WO checklist, breakdown approval) so "which unit
+     * is this replacing" is resolved the same way everywhere. An explicit
+     * $oldInstallationId always wins (the approver/technician picked one
+     * from an A/B/C list); otherwise this only auto-resolves when the
+     * equipment has at most one active installation of that part — more
+     * than one is ambiguous and the caller must supply a choice.
+     *
+     * @throws AmbiguousInstallationException
+     */
+    public function resolveActiveInstallation(Equipment $equipment, int $partId, ?int $oldInstallationId): ?PartInstallation
+    {
+        if ($oldInstallationId) {
+            return PartInstallation::whereKey($oldInstallationId)->first();
+        }
+
+        $active = $equipment->partInstallations()
+            ->where('part_id', $partId)
+            ->whereNull('removed_at')
+            ->get();
+
+        if ($active->count() > 1) {
+            throw new AmbiguousInstallationException($partId);
+        }
+
+        return $active->first();
+    }
+
     public function remove(PartInstallation $installation): PartInstallation
     {
         return DB::transaction(function () use ($installation) {
@@ -83,9 +114,13 @@ class PartLifecycleService
      * Open a repair record for a removed unit — defaults to linking the
      * unit's most recently ended installation cycle if none is given.
      */
-    public function sendToRepair(PartUnit $unit, ?int $partInstallationId, ?string $notes): PartRepair
-    {
-        return DB::transaction(function () use ($unit, $partInstallationId, $notes) {
+    public function sendToRepair(
+        PartUnit $unit,
+        ?int $partInstallationId,
+        ?string $notes,
+        ?string $estimatedCompletionDate = null,
+    ): PartRepair {
+        return DB::transaction(function () use ($unit, $partInstallationId, $notes, $estimatedCompletionDate) {
             $partInstallationId ??= $unit->installations()
                 ->whereNotNull('removed_at')
                 ->latest('removed_at')
@@ -95,6 +130,7 @@ class PartLifecycleService
                 'part_unit_id' => $unit->id,
                 'part_installation_id' => $partInstallationId,
                 'removed_at' => now(),
+                'estimated_completion_date' => $estimatedCompletionDate,
                 'disposition' => PartRepairDisposition::Pending,
                 'notes' => $notes,
             ]);
@@ -111,12 +147,17 @@ class PartLifecycleService
      * "available" for the next install), or scrapped (terminal — the unit
      * can never be installed again).
      */
-    public function updateDisposition(PartRepair $repair, PartRepairDisposition $disposition, ?string $notes = null): PartRepair
-    {
-        return DB::transaction(function () use ($repair, $disposition, $notes) {
+    public function updateDisposition(
+        PartRepair $repair,
+        PartRepairDisposition $disposition,
+        ?string $notes = null,
+        ?string $estimatedCompletionDate = null,
+    ): PartRepair {
+        return DB::transaction(function () use ($repair, $disposition, $notes, $estimatedCompletionDate) {
             $repair->update([
                 'disposition' => $disposition,
                 'notes' => $notes ?? $repair->notes,
+                'estimated_completion_date' => $estimatedCompletionDate ?? $repair->estimated_completion_date,
                 'repaired_at' => $disposition === PartRepairDisposition::Repaired ? now() : $repair->repaired_at,
             ]);
 

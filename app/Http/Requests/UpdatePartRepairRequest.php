@@ -20,6 +20,7 @@ class UpdatePartRepairRequest extends FormRequest
     {
         return [
             'disposition' => ['required', Rule::in(['pending', 'in_repair', 'repaired', 'scrapped'])],
+            'estimated_completion_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
         ];
     }

@@ -110,11 +110,22 @@ class PartInstallation extends Model
      */
     public function hasOpenLifetimeTask(): bool
     {
+        return $this->openLifetimeTask() !== null;
+    }
+
+    /**
+     * The actual open Part Lifetime-sourced task for this equipment+part
+     * pair, if any — lets PartLifetimeService::createMissingLifetimeTasks()
+     * update its due_date as fresh runtime-hours data comes in, instead of
+     * only ever creating one and leaving it frozen at the first estimate.
+     */
+    public function openLifetimeTask(): ?Task
+    {
         return Task::query()
             ->where('equipment_id', $this->equipment_id)
             ->whereNull('task_library_id')
             ->whereHas('partChecks', fn ($q) => $q->where('part_id', $this->part_id))
             ->whereIn('status', [TaskStatus::Pending, TaskStatus::InProgress])
-            ->exists();
+            ->first();
     }
 }

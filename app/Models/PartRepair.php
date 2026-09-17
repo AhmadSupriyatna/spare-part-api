@@ -12,6 +12,7 @@ class PartRepair extends Model
         'part_unit_id',
         'part_installation_id',
         'removed_at',
+        'estimated_completion_date',
         'disposition',
         'repaired_at',
         'notes',
@@ -23,6 +24,7 @@ class PartRepair extends Model
         return [
             'disposition' => PartRepairDisposition::class,
             'removed_at' => 'datetime',
+            'estimated_completion_date' => 'date',
             'repaired_at' => 'datetime',
         ];
     }

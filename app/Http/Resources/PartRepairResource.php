@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\PartRepair;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\PartRepair
+ * @mixin PartRepair
  */
 class PartRepairResource extends JsonResource
 {
@@ -35,6 +36,7 @@ class PartRepairResource extends JsonResource
                 fn () => $this->partInstallation?->equipment?->machine?->line?->name
             ),
             'removed_at' => $this->removed_at,
+            'estimated_completion_date' => $this->estimated_completion_date,
             'disposition' => $this->disposition,
             'repaired_at' => $this->repaired_at,
             'notes' => $this->notes,

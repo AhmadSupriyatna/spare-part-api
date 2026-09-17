@@ -45,6 +45,7 @@ class PartRepairController extends Controller
             $partUnit,
             $data['part_installation_id'] ?? null,
             $data['notes'] ?? null,
+            $data['estimated_completion_date'] ?? null,
         );
 
         return new PartRepairResource($repair->load('partUnit.part'));
@@ -62,6 +63,7 @@ class PartRepairController extends Controller
             $partRepair,
             PartRepairDisposition::from($data['disposition']),
             $data['notes'] ?? null,
+            $data['estimated_completion_date'] ?? null,
         );
 
         return new PartRepairResource($repair->load('partUnit.part'));

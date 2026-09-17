@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\PartStockNotFoundException;
 use App\Exceptions\ReplacementRequestAlreadyReviewedException;
@@ -42,8 +43,9 @@ class PartReplacementRequestController extends Controller
                 $partReplacementRequest,
                 $request->user(),
                 $request->validated()['notes'] ?? null,
+                $request->validated()['old_installation_id'] ?? null,
             );
-        } catch (PartStockNotFoundException|InsufficientStockException $e) {
+        } catch (PartStockNotFoundException|InsufficientStockException|AmbiguousInstallationException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (ReplacementRequestAlreadyReviewedException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
