@@ -126,7 +126,12 @@ class TaskController extends Controller
                     }
                 })
                 ->with(['equipment.machine.line.branch', 'assignee', 'partStock.part', 'partChecks.part'])
-                ->orderByRaw("CASE status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END")
+                // Active work (pending/in_progress) always floats above
+                // completed/cancelled history, but within that group it's
+                // purely nearest-due-date-first — status doesn't jump a
+                // far-future in_progress WO ahead of a pending one due
+                // sooner, which the old status-then-date ordering did.
+                ->orderByRaw("CASE WHEN status IN ('pending', 'in_progress') THEN 0 ELSE 1 END")
                 ->orderBy('due_date')
                 ->get()
         );

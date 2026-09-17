@@ -168,7 +168,6 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
 
         Route::post('/equipment/{equipment}/tasks', [TaskController::class, 'store']);
         Route::put('/tasks/{task}', [TaskController::class, 'update']);
-        Route::put('/tasks/{task}/reschedule', [TaskController::class, 'reschedule']);
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
 
         Route::post('/parts/{part}/suppliers', [PartSupplierController::class, 'store']);
@@ -204,11 +203,15 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
 
     // Reorder request approvals: an "approve" action Supervisor keeps even
     // though it sits outside their usual read-only oversight, alongside
-    // Admin Spare Part/Superadmin.
+    // Admin Spare Part/Superadmin. Drag-to-reschedule on the PM Schedule
+    // calendar lives here too — Supervisor plans/oversees the schedule,
+    // same reasoning.
     Route::middleware('role:admin_spare_part|supervisor|superadmin')->group(function () {
         Route::post('/reorder-requests/{reorderRequest}/approve', [ReorderRequestController::class, 'approve']);
         Route::post('/reorder-requests/{reorderRequest}/mark-ordered', [ReorderRequestController::class, 'markOrdered']);
         Route::post('/reorder-requests/{reorderRequest}/cancel', [ReorderRequestController::class, 'cancel']);
+
+        Route::put('/tasks/{task}/reschedule', [TaskController::class, 'reschedule']);
     });
 
     // Breakdown replacement / part-unit-action approval boards, read side:
