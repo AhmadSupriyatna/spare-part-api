@@ -211,17 +211,21 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::post('/reorder-requests/{reorderRequest}/cancel', [ReorderRequestController::class, 'cancel']);
     });
 
-    // Breakdown replacement / part-unit-action approval boards: Engineer
-    // decides whether a QR-scanned field request goes through; Supervisor
-    // and Superadmin get the same oversight they have everywhere else.
-    // Teknisi does not approve — their role is limited to working and
-    // completing their own assigned tasks.
+    // Breakdown replacement / part-unit-action approval boards, read side:
+    // Engineer keeps visibility into what's pending/decided (it's their own
+    // field requests half the time), Supervisor/Superadmin the same.
     Route::middleware('role:engineer|supervisor|superadmin')->group(function () {
         Route::get('/branches/{branch}/replacement-requests', [PartReplacementRequestController::class, 'index']);
+        Route::get('/branches/{branch}/part-unit-action-requests', [PartUnitActionRequestController::class, 'index']);
+    });
+
+    // Same boards, decide side: approving/rejecting is Supervisor's call
+    // (plus Superadmin) — Engineer can see the board but not act on it, and
+    // Admin Spare Part never had a say here since this isn't inventory.
+    Route::middleware('role:supervisor|superadmin')->group(function () {
         Route::post('/replacement-requests/{partReplacementRequest}/approve', [PartReplacementRequestController::class, 'approve']);
         Route::post('/replacement-requests/{partReplacementRequest}/reject', [PartReplacementRequestController::class, 'reject']);
 
-        Route::get('/branches/{branch}/part-unit-action-requests', [PartUnitActionRequestController::class, 'index']);
         Route::post('/part-unit-action-requests/{partUnitActionRequest}/approve', [PartUnitActionRequestController::class, 'approve']);
         Route::post('/part-unit-action-requests/{partUnitActionRequest}/reject', [PartUnitActionRequestController::class, 'reject']);
     });

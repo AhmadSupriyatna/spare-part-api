@@ -88,12 +88,43 @@ class TaskController extends Controller
     }
 
     /**
-     * Tasks assigned to the currently authenticated user (for a teknisi's own worklist).
+     * The Workspace task pool: tasks already claimed by the current user,
+     * plus — for Engineer/Supervisor/Superadmin, who are the only roles
+     * that can actually work a WO — every still-unclaimed task, so the
+     * work is visible to whoever from the right level picks it up first
+     * (see ensureCanWork(), which does the actual claiming on start/
+     * complete/cancel). Scoped to whichever branch is active in the
+     * header, same as every other list in the app; branch_id is clamped
+     * to the user's own branches unless they're branch-exempt, mirroring
+     * SearchController since this route isn't bound to a branch model for
+     * EnsureBranchAccess to check automatically.
      */
     public function mine(Request $request): AnonymousResourceCollection
     {
+        $user = $request->user();
+        $branchId = $request->integer('branch_id') ?: null;
+
+        if ($branchId && ! $user->hasAnyRole(['superadmin', 'supervisor'])) {
+            $allowed = $user->branches()->pluck('branches.id');
+            if (! $allowed->contains($branchId)) {
+                $branchId = null;
+            }
+        }
+
+        $canClaim = $user->hasAnyRole(['engineer', 'supervisor', 'superadmin']);
+
         return TaskResource::collection(
-            Task::where('assigned_to', $request->user()->id)
+            Task::query()
+                ->when(
+                    $branchId,
+                    fn ($q) => $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branchId))
+                )
+                ->where(function ($q) use ($user, $canClaim) {
+                    $q->where('assigned_to', $user->id);
+                    if ($canClaim) {
+                        $q->orWhereNull('assigned_to');
+                    }
+                })
                 ->with(['equipment.machine.line.branch', 'assignee', 'partStock.part', 'partChecks.part'])
                 ->orderByRaw("CASE status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END")
                 ->orderBy('due_date')
@@ -161,14 +192,14 @@ class TaskController extends Controller
 
     public function start(Request $request, Task $task): TaskResource
     {
-        $this->ensureAssignee($request, $task);
+        $this->ensureCanWork($request, $task);
 
         return new TaskResource($this->tasks->start($task));
     }
 
     public function complete(CompleteTaskRequest $request, Task $task): JsonResponse|TaskResource
     {
-        $this->ensureAssignee($request, $task);
+        $this->ensureCanWork($request, $task);
 
         $data = $request->validated();
 
@@ -190,7 +221,7 @@ class TaskController extends Controller
 
     public function cancel(CancelTaskRequest $request, Task $task): TaskResource
     {
-        $this->ensureAssignee($request, $task);
+        $this->ensureCanWork($request, $task);
 
         return new TaskResource(
             $this->tasks->cancel($task, $request->validated()['notes'] ?? null)
@@ -198,17 +229,35 @@ class TaskController extends Controller
     }
 
     /**
-     * Only the technician/engineer a task is actually assigned to may work
-     * it — closes a gap where any authenticated user could start/complete/
-     * cancel any task regardless of who it was handed to.
+     * Tasks are no longer handed to one specific person up front — Task
+     * Library/Part Lifetime auto-scheduling always leaves them unclaimed
+     * (see PmSchedulingService). Only Engineer/Supervisor/Superadmin can
+     * actually work a WO at all; the first one of them to start/complete/
+     * cancel an unclaimed task claims it (assigned_to is set here), and
+     * from then on only that person (or Superadmin) may act on it —
+     * closes the gap where anyone could act on anyone else's claimed work.
      */
-    private function ensureAssignee(Request $request, Task $task): void
+    private function ensureCanWork(Request $request, Task $task): void
     {
+        $user = $request->user();
+
+        if ($task->assigned_to !== null) {
+            abort_unless(
+                $task->assigned_to === $user->id || $user->hasRole('superadmin'),
+                403,
+                'Tugas ini sudah diklaim oleh pengguna lain.'
+            );
+
+            return;
+        }
+
         abort_unless(
-            $task->assigned_to === $request->user()->id,
+            $user->hasAnyRole(['engineer', 'supervisor', 'superadmin']),
             403,
-            'Tugas ini tidak ditugaskan untuk Anda.'
+            'Hanya Supervisor dan Engineer yang bisa mengerjakan WO.'
         );
+
+        $task->update(['assigned_to' => $user->id]);
     }
 
     public function destroy(Task $task): Response
