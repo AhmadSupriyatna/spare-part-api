@@ -35,7 +35,24 @@ class RescheduleTaskRequest extends FormRequest
         $validator->after(function (Validator $validator) {
             $task = $this->route('task');
 
-            if (! $task || ! $task->due_date || ! $this->filled('due_date')) {
+            if (! $task) {
+                return;
+            }
+
+            // Ad-hoc/breakdown work (no Task Library recipe, no PM checklist)
+            // is reactive by nature — it isn't part of the planned schedule
+            // this calendar is bin-packing, so it has no "planned date" to
+            // shift against and shouldn't be draggable to begin with.
+            if ($task->task_library_id === null && ! $task->partChecks()->exists()) {
+                $validator->errors()->add(
+                    'due_date',
+                    'WO Breakdown tidak bisa dijadwal ulang lewat kalender PM Schedule.'
+                );
+
+                return;
+            }
+
+            if (! $task->due_date || ! $this->filled('due_date')) {
                 return;
             }
 
