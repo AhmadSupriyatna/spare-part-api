@@ -31,15 +31,20 @@ class DatabaseSeeder extends Seeder
         ]);
         $superadmin->assignRole(UserRole::Superadmin->value);
 
+        // Kept the variable/email name "teknisi" so the rest of this seeder
+        // and LifecycleDemoSeeder (which looks this account up by email)
+        // didn't need renaming — the role assigned is Engineer, since
+        // Teknisi was retired as a distinct role (2026-09-17, no route ever
+        // gated on it) and folded into Engineer, the sole field-executor role.
         $teknisi = User::factory()->create([
-            'name' => 'Teknisi Demo',
+            'name' => 'Engineer Demo (Lapangan)',
             'email' => 'teknisi@spareparts.test',
         ]);
-        $teknisi->assignRole(UserRole::Teknisi->value);
+        $teknisi->assignRole(UserRole::Engineer->value);
 
-        // Admin Spare Part and Engineer are deliberately scoped to a single
-        // branch below (not all of them, unlike Superadmin/Teknisi/
-        // Supervisor) so the branch.access restriction on those roles is
+        // Admin Spare Part, Supervisor, and Engineer are all deliberately
+        // scoped to a single branch below (only Superadmin gets every
+        // branch) so the branch.access restriction on those roles is
         // actually exercised by a fresh seed, not just true by omission.
         $adminSparePart = User::factory()->create([
             'name' => 'Admin Spare Part Demo',
@@ -62,8 +67,8 @@ class DatabaseSeeder extends Seeder
         $this->call(DemoDataSeeder::class);
 
         $superadmin->branches()->attach(Branch::all());
-        $teknisi->branches()->attach(Branch::all());
-        $supervisor->branches()->attach(Branch::all());
+        $teknisi->branches()->attach(Branch::first());
+        $supervisor->branches()->attach(Branch::first());
         $adminSparePart->branches()->attach(Branch::first());
         $engineer->branches()->attach(Branch::first());
 

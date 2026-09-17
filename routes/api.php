@@ -10,8 +10,8 @@ use App\Http\Controllers\Api\MachineController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\PartInstallationController;
 use App\Http\Controllers\Api\PartRepairController;
-use App\Http\Controllers\Api\PartStockController;
 use App\Http\Controllers\Api\PartReplacementRequestController;
+use App\Http\Controllers\Api\PartStockController;
 use App\Http\Controllers\Api\PartSupplierController;
 use App\Http\Controllers\Api\PartUnitActionRequestController;
 use App\Http\Controllers\Api\PartUnitController;
@@ -224,5 +224,15 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::get('/branches/{branch}/part-unit-action-requests', [PartUnitActionRequestController::class, 'index']);
         Route::post('/part-unit-action-requests/{partUnitActionRequest}/approve', [PartUnitActionRequestController::class, 'approve']);
         Route::post('/part-unit-action-requests/{partUnitActionRequest}/reject', [PartUnitActionRequestController::class, 'reject']);
+    });
+
+    // Managing other people's accounts (role, branches, password, active
+    // status) is the one thing kept to Superadmin only — narrower than
+    // every other "kelola" group above, deliberately.
+    Route::middleware('role:superadmin')->group(function () {
+        Route::post('/users', [UserController::class, 'store']);
+        Route::put('/users/{user}', [UserController::class, 'update']);
+        Route::post('/users/{user}/deactivate', [UserController::class, 'deactivate']);
+        Route::post('/users/{user}/activate', [UserController::class, 'activate']);
     });
 });

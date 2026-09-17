@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\User
+ * @mixin User
  */
 class UserResource extends JsonResource
 {
@@ -19,7 +20,17 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'avatar_url' => $this->avatarUrl(),
+            'is_active' => $this->is_active,
             'roles' => $this->getRoleNames(),
+            'branches' => $this->whenLoaded(
+                'branches',
+                fn () => $this->branches->map(fn ($branch) => [
+                    'id' => $branch->id,
+                    'code' => $branch->code,
+                    'name' => $branch->name,
+                ])->values()
+            ),
         ];
     }
 }

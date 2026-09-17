@@ -11,12 +11,14 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Superadmin and Supervisor see/manage every branch, as they do everywhere
- * else in the app. Every other role (Admin Spare Part, Engineer, Teknisi)
- * is confined to the branches actually assigned to their account — this is
- * the server-side enforcement of that; branches() on the user model was
- * previously only ever used to populate the branch switcher in the UI,
- * nothing stopped a request for a branch outside that list.
+ * Only Superadmin sees/manages every branch. Every other role (Supervisor/
+ * Manager, Admin Spare Part, Engineer) is confined to the branches actually
+ * assigned to their account — this is the server-side enforcement of that;
+ * branches() on the user model was previously only ever used to populate
+ * the branch switcher in the UI, nothing stopped a request for a branch
+ * outside that list. Supervisor used to be treated as unrestricted here
+ * too, before it was changed (2026-09-17) so Supervisors are per-branch
+ * just like Admin Spare Part.
  *
  * Resolves the branch from whichever route-bound model the request touches
  * (see BranchScopeResolver) plus a couple of body fields that reference a
@@ -31,7 +33,7 @@ class EnsureBranchAccess
     {
         $user = $request->user();
 
-        if (! $user || $user->hasAnyRole([UserRole::Superadmin->value, UserRole::Supervisor->value])) {
+        if (! $user || $user->hasRole(UserRole::Superadmin->value)) {
             return $next($request);
         }
 

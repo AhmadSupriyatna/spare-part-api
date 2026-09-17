@@ -29,6 +29,12 @@ class AuthController extends Controller
             ]);
         }
 
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => ['Akun ini telah dinonaktifkan. Hubungi Super Admin.'],
+            ]);
+        }
+
         $token = $user->createToken($credentials['device_name']);
 
         return response()->json([
@@ -51,10 +57,7 @@ class AuthController extends Controller
 
     private function transformUser(User $user): array
     {
-        $hasAllBranchAccess = $user->hasAnyRole([
-            UserRole::Superadmin->value,
-            UserRole::Supervisor->value,
-        ]);
+        $hasAllBranchAccess = $user->hasRole(UserRole::Superadmin->value);
 
         $branches = $hasAllBranchAccess
             ? Branch::where('is_active', true)->get()
@@ -64,6 +67,7 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'avatar_url' => $user->avatarUrl(),
             'roles' => $user->getRoleNames(),
             'branches' => $branches->map(fn (Branch $branch) => [
                 'id' => $branch->id,
