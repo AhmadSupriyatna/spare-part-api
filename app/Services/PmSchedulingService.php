@@ -19,7 +19,9 @@ use Illuminate\Support\Facades\DB;
  * (one-shot picks, Gauge/runtime-based libraries, Part Lifetime) still
  * goes through schedule()/scheduleFromLifetime() directly, one at a time.
  * Either path leaves the resulting Task with one TaskPartCheck row per
- * planned part, which is what makes it show up as a PM task (see
+ * planned *unit* (see below — a library part planned in quantity 3 becomes
+ * 3 separate rows, all quantity_planned=1, not one row of quantity_planned
+ * 3), which is what makes it show up as a PM task (see
  * TaskController::pmSchedule()) and completes via the checklist flow.
  */
 class PmSchedulingService
@@ -37,12 +39,20 @@ class PmSchedulingService
                 'due_date' => $dueDate,
             ]);
 
+            // One row per planned unit, not one row per part — "satu baris
+            // satu alamat": a checklist row is what the technician picks an
+            // A/B/C installation for when replacing it (see
+            // TaskService::resolveActiveInstallation()), so a part planned
+            // in quantity 3 needs 3 independently-completable rows, each
+            // able to point at a different installation.
             foreach ($library->parts as $libraryPart) {
-                TaskPartCheck::create([
-                    'task_id' => $task->id,
-                    'part_id' => $libraryPart->part_id,
-                    'quantity_planned' => $libraryPart->quantity_required,
-                ]);
+                for ($i = 0; $i < $libraryPart->quantity_required; $i++) {
+                    TaskPartCheck::create([
+                        'task_id' => $task->id,
+                        'part_id' => $libraryPart->part_id,
+                        'quantity_planned' => 1,
+                    ]);
+                }
             }
 
             return $task;

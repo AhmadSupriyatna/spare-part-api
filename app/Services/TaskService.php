@@ -45,7 +45,7 @@ class TaskService
      * quantity_used?, reason?, part_unit_id?, old_installation_id?}` — see
      * completeChecklist().
      *
-     * @param  array<int, array{part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int}>|null  $checks
+     * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int}>|null  $checks
      *
      * @throws PartStockNotFoundException if a checklist part is marked replaced
      *                                    with a brand-new unit but has no stock record in the equipment's branch.
@@ -108,15 +108,52 @@ class TaskService
     }
 
     /**
-     * @param  array<int, array{part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int}>  $checks
+     * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int}>  $checks
      */
     private function completeChecklist(Task $task, ?User $user, array $checks): void
     {
         $branchId = $task->equipment->machine->line->branch_id;
 
+        // Resolve "which old installation is this closing" for every
+        // replaced check up front, before any of this batch's own
+        // remove()/install() calls run. Doing it lazily inside the loop
+        // below was a real bug: a brand-new installation created for an
+        // earlier row of the same part (e.g. 3 checklist rows all planning
+        // fresh units of the same bearing) would itself look like "the"
+        // one pre-existing active installation to the next row, so that
+        // row would wrongly close its own sibling instead of creating an
+        // independent new one. Resolving against a stable snapshot first —
+        // and excluding whatever's already been claimed within this same
+        // batch — keeps each row's resolution about what genuinely existed
+        // before this completion request started.
+        $oldInstallationByCheckId = [];
+        $claimedInstallationIds = [];
         foreach ($checks as $check) {
+            if (empty($check['is_replaced'])) {
+                continue;
+            }
+
+            $old = $this->lifecycle->resolveActiveInstallation(
+                $task->equipment,
+                $check['part_id'],
+                $check['old_installation_id'] ?? null,
+                $claimedInstallationIds,
+            );
+
+            $oldInstallationByCheckId[$check['id']] = $old;
+
+            if ($old) {
+                $claimedInstallationIds[] = $old->id;
+            }
+        }
+
+        foreach ($checks as $check) {
+            // Identified by the check row's own id, not part_id — a task
+            // can now have several rows for the same part (one per address/
+            // unit, see PmSchedulingService::schedule()), so part_id alone
+            // is no longer unique within one task's checklist.
             $partCheck = TaskPartCheck::where('task_id', $task->id)
-                ->where('part_id', $check['part_id'])
+                ->where('id', $check['id'])
                 ->firstOrFail();
 
             $isReplaced = (bool) $check['is_replaced'];
@@ -150,11 +187,7 @@ class TaskService
                     );
                 }
 
-                $oldInstallation = $this->lifecycle->resolveActiveInstallation(
-                    $task->equipment,
-                    $check['part_id'],
-                    $check['old_installation_id'] ?? null,
-                );
+                $oldInstallation = $oldInstallationByCheckId[$check['id']] ?? null;
 
                 if ($oldInstallation) {
                     $this->lifecycle->remove($oldInstallation);

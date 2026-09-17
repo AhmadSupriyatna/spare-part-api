@@ -126,9 +126,21 @@ class PartLifecycleService
      * equipment has at most one active installation of that part — more
      * than one is ambiguous and the caller must supply a choice.
      *
+     * $excludeIds lets a caller resolving several checks in one batch (see
+     * TaskService::completeChecklist()) rule out installations it has
+     * already claimed for an earlier check in that same batch, so two rows
+     * planning brand-new units of the same part don't both try to claim the
+     * one pre-existing installation as "the old one." Callers must resolve
+     * every check against a snapshot taken *before* any install()/remove()
+     * calls in the batch run — otherwise a sibling row's brand-new
+     * installation (created moments earlier in the same request) would
+     * itself look like a pre-existing "old" one to close out.
+     *
+     * @param  int[]  $excludeIds
+     *
      * @throws AmbiguousInstallationException
      */
-    public function resolveActiveInstallation(Equipment $equipment, int $partId, ?int $oldInstallationId): ?PartInstallation
+    public function resolveActiveInstallation(Equipment $equipment, int $partId, ?int $oldInstallationId, array $excludeIds = []): ?PartInstallation
     {
         if ($oldInstallationId) {
             return PartInstallation::whereKey($oldInstallationId)->first();
@@ -137,6 +149,7 @@ class PartLifecycleService
         $active = $equipment->partInstallations()
             ->where('part_id', $partId)
             ->whereNull('removed_at')
+            ->whereNotIn('id', $excludeIds)
             ->get();
 
         if ($active->count() > 1) {

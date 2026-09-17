@@ -8,14 +8,19 @@ use App\Http\Requests\AdjustStockRequest;
 use App\Http\Requests\ReceiveStockRequest;
 use App\Http\Requests\UpdatePartStockLocationRequest;
 use App\Http\Resources\PartStockResource;
+use App\Http\Resources\StockLedgerReportResource;
 use App\Http\Resources\StockLedgerResource;
 use App\Models\Branch;
 use App\Models\Location;
+use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
 use App\Models\StockLedger;
+use App\Models\Task;
 use App\Services\StockMovementService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Date;
 
 class PartStockController extends Controller
 {
@@ -95,6 +100,58 @@ class PartStockController extends Controller
         return StockLedgerResource::collection(
             $partStock->ledgerEntries()->with('user')->latest('occurred_at')->paginate(25)
         );
+    }
+
+    /**
+     * Branch-wide in/out ledger report for the "Kelola Stok" ledger tab —
+     * every movement (any part, any part_stock) in this branch, optionally
+     * narrowed by date range and/or part, with each row resolved to the
+     * line it's traceable to (when its reference is a WO Task or a
+     * breakdown PartReplacementRequest) so a line filter can also apply.
+     * The line filter happens in PHP after fetching, since "which line"
+     * isn't a plain column — it's derived through the polymorphic
+     * reference — but the date-range/part_id/branch narrowing happens in
+     * the query first, so what gets pulled from the DB stays bounded.
+     */
+    public function branchLedger(Request $request, Branch $branch): AnonymousResourceCollection
+    {
+        $query = StockLedger::query()
+            ->whereHas('partStock', function ($q) use ($request, $branch) {
+                $q->where('branch_id', $branch->id);
+
+                if ($request->filled('part_id')) {
+                    $q->where('part_id', $request->integer('part_id'));
+                }
+            });
+
+        if ($request->filled('from')) {
+            $query->where('occurred_at', '>=', Date::parse($request->string('from'))->startOfDay());
+        }
+
+        if ($request->filled('to')) {
+            $query->where('occurred_at', '<=', Date::parse($request->string('to'))->endOfDay());
+        }
+
+        $entries = $query
+            ->with([
+                'partStock.part',
+                'user',
+                'reference' => fn ($morphTo) => $morphTo->morphWith([
+                    Task::class => ['equipment.machine.line'],
+                    PartReplacementRequest::class => ['equipment.machine.line'],
+                ]),
+            ])
+            ->orderByDesc('occurred_at')
+            ->get();
+
+        if ($request->filled('line_id')) {
+            $lineId = $request->integer('line_id');
+            $entries = $entries->filter(
+                fn (StockLedger $entry) => $entry->reference?->equipment?->machine?->line_id === $lineId
+            )->values();
+        }
+
+        return StockLedgerReportResource::collection($entries);
     }
 
     /**

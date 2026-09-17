@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\Task;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CompleteTaskRequest extends FormRequest
 {
@@ -30,6 +31,14 @@ class CompleteTaskRequest extends FormRequest
             return [
                 'notes' => ['nullable', 'string'],
                 'checks' => ['required', 'array', 'min:1'],
+                // One TaskPartCheck row is now always exactly one address
+                // (see PmSchedulingService::schedule()) — a task can have
+                // several rows sharing the same part_id, so `id` (not
+                // part_id) is what identifies which row this entry updates.
+                'checks.*.id' => [
+                    'required', 'integer',
+                    Rule::exists('task_part_checks', 'id')->where('task_id', $task?->id),
+                ],
                 'checks.*.part_id' => ['required', 'integer', 'exists:parts,id'],
                 'checks.*.is_replaced' => ['required', 'boolean'],
                 'checks.*.quantity_used' => [
