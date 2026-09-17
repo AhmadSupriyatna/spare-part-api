@@ -90,9 +90,15 @@ class PartLifecycleService
             }
         }
 
+        // Locked so two concurrent installs for the same equipment+part
+        // (e.g. two technicians completing WOs on the same gearbox at once)
+        // can't both read the same "used letters" snapshot and pick the
+        // same free one — this whole method runs inside install()'s
+        // transaction, so the lock holds until that commits.
         $usedLabels = $equipment->partInstallations()
             ->where('part_id', $partId)
             ->whereNull('removed_at')
+            ->lockForUpdate()
             ->pluck('slot_label')
             ->filter()
             ->all();
