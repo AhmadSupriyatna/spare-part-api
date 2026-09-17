@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
 class PartLifecycleService
 {
     /**
-     * @param  array{part_id: int, part_unit_id?: int|null, installed_at?: string|null, notes?: string|null}  $data
+     * @param  array{part_id: int, part_unit_id?: int|null, installed_at?: string|null, notes?: string|null, replacing_installation_id?: int|null}  $data
      *
      * @throws PartUnitAlreadyInstalledException if the chosen unit is already mounted somewhere.
      */
@@ -51,9 +51,12 @@ class PartLifecycleService
 
             $unit->update(['status' => PartUnitStatus::InService]);
 
+            $slotLabel = $this->resolveSlotLabel($equipment, $data['part_id'], $data['replacing_installation_id'] ?? null);
+
             $installation = $equipment->partInstallations()->create([
                 'part_id' => $data['part_id'],
                 'part_unit_id' => $unit->id,
+                'slot_label' => $slotLabel,
                 'installed_at' => $data['installed_at'] ?? now(),
                 'installed_at_runtime_hours' => $currentRuntimeHours,
                 'installed_by' => $user->id,
@@ -64,6 +67,47 @@ class PartLifecycleService
 
             return $installation;
         });
+    }
+
+    /**
+     * A part's "address" on one equipment (A, B, C...) — unlike
+     * PartUnit.unit_code (a global running count across the whole part
+     * catalog), this is scoped to just this equipment+part pair and stays
+     * stable across a replacement: if this install is closing out a
+     * specific old one ($replacingInstallationId), it inherits that
+     * installation's slot_label directly. Otherwise (a fresh position, or
+     * an additional unit alongside existing ones) it takes the lowest
+     * letter not currently held by an active installation of that part
+     * here — so a freed-up letter gets reused rather than always growing.
+     */
+    private function resolveSlotLabel(Equipment $equipment, int $partId, ?int $replacingInstallationId): string
+    {
+        if ($replacingInstallationId) {
+            $inherited = PartInstallation::whereKey($replacingInstallationId)->value('slot_label');
+
+            if ($inherited) {
+                return $inherited;
+            }
+        }
+
+        $usedLabels = $equipment->partInstallations()
+            ->where('part_id', $partId)
+            ->whereNull('removed_at')
+            ->pluck('slot_label')
+            ->filter()
+            ->all();
+
+        for ($i = 0; $i < 26; $i++) {
+            $candidate = chr(65 + $i);
+
+            if (! in_array($candidate, $usedLabels, true)) {
+                return $candidate;
+            }
+        }
+
+        // 26 simultaneous active installations of one part on one equipment
+        // is already absurd — fall back to a running count rather than throw.
+        return (string) ($equipment->partInstallations()->where('part_id', $partId)->count() + 1);
     }
 
     /**

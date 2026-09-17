@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\PartInstallation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\PartInstallation
+ * @mixin PartInstallation
  */
 class PartInstallationResource extends JsonResource
 {
@@ -35,6 +36,7 @@ class PartInstallationResource extends JsonResource
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
             'part_unit_id' => $this->part_unit_id,
             'unit_code' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->unit_code),
+            'slot_label' => $this->slot_label,
             'estimated_lifetime_hours' => $this->whenLoaded('part', fn () => $this->part?->estimated_lifetime_hours),
             'installed_at' => $this->installed_at,
             'installed_at_runtime_hours' => $this->installed_at_runtime_hours,

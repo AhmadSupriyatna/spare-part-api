@@ -75,6 +75,7 @@ class PartReplacementService
             // what the separate QR-per-unit reinstall flow is for.
             $installation = $this->lifecycle->install($equipment, [
                 'part_id' => $locked->part_id,
+                'replacing_installation_id' => $oldInstallation?->id,
                 'notes' => "Breakdown: diajukan oleh {$locked->requested_by_name}".
                     ($locked->reason ? " — {$locked->reason}" : ''),
             ], $reviewer);

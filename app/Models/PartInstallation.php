@@ -12,6 +12,7 @@ class PartInstallation extends Model
         'equipment_id',
         'part_id',
         'part_unit_id',
+        'slot_label',
         'installed_at',
         'installed_at_runtime_hours',
         'removed_at',

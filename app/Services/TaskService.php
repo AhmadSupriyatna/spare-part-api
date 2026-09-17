@@ -163,6 +163,7 @@ class TaskService
                 $installation = $this->lifecycle->install($task->equipment, [
                     'part_id' => $check['part_id'],
                     'part_unit_id' => $check['part_unit_id'] ?? null,
+                    'replacing_installation_id' => $oldInstallation?->id,
                 ], $user);
             }
 
