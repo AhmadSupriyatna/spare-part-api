@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Location;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\Location
+ * @mixin Location
  */
 class LocationResource extends JsonResource
 {
@@ -18,11 +19,14 @@ class LocationResource extends JsonResource
         return [
             'id' => $this->id,
             'branch_id' => $this->branch_id,
+            'rack_level_id' => $this->rack_level_id,
+            'bin_number' => $this->bin_number,
             'code' => $this->code,
-            'rack' => $this->rack,
-            'bin' => $this->bin,
+            'rack_label' => $this->whenLoaded('rackLevel', fn () => $this->rackLevel?->rack?->label),
+            'level_number' => $this->whenLoaded('rackLevel', fn () => $this->rackLevel?->level_number),
             'description' => $this->description,
             'is_active' => $this->is_active,
+            'part_stocks_count' => $this->whenCounted('partStocks'),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

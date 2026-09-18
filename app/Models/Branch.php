@@ -35,6 +35,11 @@ class Branch extends Model
         return $this->hasMany(Location::class);
     }
 
+    public function racks(): HasMany
+    {
+        return $this->hasMany(Rack::class);
+    }
+
     public function partStocks(): HasMany
     {
         return $this->hasMany(PartStock::class);

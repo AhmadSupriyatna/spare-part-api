@@ -17,6 +17,8 @@ use App\Http\Controllers\Api\PartUnitActionRequestController;
 use App\Http\Controllers\Api\PartUnitController;
 use App\Http\Controllers\Api\PublicBreakdownController;
 use App\Http\Controllers\Api\PublicPartUnitController;
+use App\Http\Controllers\Api\RackController;
+use App\Http\Controllers\Api\RackLevelController;
 use App\Http\Controllers\Api\ReorderRequestController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\StockAlertController;
@@ -68,6 +70,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
     Route::get('/branches/{branch}/locations', [LocationController::class, 'index']);
     Route::get('/locations/{location}', [LocationController::class, 'show']);
+    Route::get('/branches/{branch}/racks', [RackController::class, 'index']);
 
     // Stock: any authenticated role can view current stock and its history.
     Route::get('/branches/{branch}/part-stocks', [PartStockController::class, 'index']);
@@ -143,9 +146,13 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::post('/branches/{branch}/suppliers', [SupplierController::class, 'store']);
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
         Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy']);
-        Route::post('/branches/{branch}/locations', [LocationController::class, 'store']);
         Route::put('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
+        Route::post('/branches/{branch}/racks', [RackController::class, 'store']);
+        Route::delete('/racks/{rack}', [RackController::class, 'destroy']);
+        Route::post('/racks/{rack}/levels', [RackLevelController::class, 'store']);
+        Route::delete('/rack-levels/{rackLevel}', [RackLevelController::class, 'destroy']);
+        Route::post('/rack-levels/{rackLevel}/locations', [LocationController::class, 'store']);
 
         Route::post('/part-stocks/{partStock}/receive', [PartStockController::class, 'receive']);
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])

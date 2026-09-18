@@ -14,6 +14,8 @@ use App\Models\PartSupplier;
 use App\Models\PartUnit;
 use App\Models\PartUnitActionRequest;
 use App\Models\ProductionLine;
+use App\Models\Rack;
+use App\Models\RackLevel;
 use App\Models\Supplier;
 use App\Models\Task;
 use App\Models\TaskLibrary;
@@ -32,7 +34,8 @@ class BranchScopeResolver
     {
         return match (true) {
             $model instanceof Branch => $model->id,
-            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock => $model->branch_id,
+            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack => $model->branch_id,
+            $model instanceof RackLevel => $model->rack->branch_id,
             $model instanceof PartUnitActionRequest => $model->branch_id,
             $model instanceof Machine => $model->line->branch_id,
             $model instanceof Equipment => $model->machine->line->branch_id,
