@@ -140,7 +140,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     // Superadmin can act outside it. Supervisor is deliberately absent here
     // — oversight (approve + view everywhere) but no master-data CRUD.
     Route::middleware('role:admin_spare_part|superadmin')->group(function () {
-        Route::apiResource('branches', BranchController::class)->only(['store', 'update', 'destroy']);
+        Route::apiResource('branches', BranchController::class)->only(['store', 'update']);
         Route::apiResource('parts', PartController::class)->only(['store', 'update', 'destroy']);
         Route::post('/units', [UnitController::class, 'store']);
         Route::put('/units/{unit}', [UnitController::class, 'update']);
@@ -267,5 +267,16 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         // correction, not a routine inventory action, so it's kept as
         // narrow as account management above.
         Route::delete('/part-repairs/{partRepair}', [PartRepairController::class, 'destroy']);
+
+        // Archiving (and the rarely-needed hard delete) a Plant is kept to
+        // Superadmin only and gated behind DestroyWithPasswordRequest —
+        // branch_id cascades to suppliers, locations/racks, part_stocks,
+        // lines, budgets, and the branch_user pivot, so this is by far the
+        // widest-blast-radius action in the app. Un-archiving doesn't need
+        // the password re-entry since it only restores access, it can't
+        // lose anything.
+        Route::post('/branches/{branch}/archive', [BranchController::class, 'archive']);
+        Route::post('/branches/{branch}/unarchive', [BranchController::class, 'unarchive']);
+        Route::delete('/branches/{branch}', [BranchController::class, 'destroy']);
     });
 });
