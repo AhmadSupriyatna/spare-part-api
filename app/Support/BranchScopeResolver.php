@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Branch;
+use App\Models\Budget;
 use App\Models\Equipment;
 use App\Models\Location;
 use App\Models\Machine;
@@ -34,7 +35,7 @@ class BranchScopeResolver
     {
         return match (true) {
             $model instanceof Branch => $model->id,
-            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack => $model->branch_id,
+            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack, $model instanceof Budget => $model->branch_id,
             $model instanceof RackLevel => $model->rack->branch_id,
             $model instanceof PartUnitActionRequest => $model->branch_id,
             $model instanceof Machine => $model->line->branch_id,

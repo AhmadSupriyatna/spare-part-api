@@ -40,6 +40,11 @@ class Branch extends Model
         return $this->hasMany(Rack::class);
     }
 
+    public function budgets(): HasMany
+    {
+        return $this->hasMany(Budget::class);
+    }
+
     public function partStocks(): HasMany
     {
         return $this->hasMany(PartStock::class);

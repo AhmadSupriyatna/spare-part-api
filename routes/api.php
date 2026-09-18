@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
+use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\CompanySettingController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\LineController;
@@ -219,6 +220,14 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::post('/reorder-requests/{reorderRequest}/cancel', [ReorderRequestController::class, 'cancel']);
 
         Route::put('/tasks/{task}/reschedule', [TaskController::class, 'reschedule']);
+
+        // Budget is a planning/finance concern — Admin Spare Part sets it,
+        // Supervisor oversees it, Engineer has no reason to see or touch it.
+        Route::get('/branches/{branch}/budgets', [BudgetController::class, 'index']);
+        Route::get('/branches/{branch}/budgets/estimate', [BudgetController::class, 'estimate']);
+        Route::post('/branches/{branch}/budgets', [BudgetController::class, 'store']);
+        Route::put('/budgets/{budget}', [BudgetController::class, 'update']);
+        Route::delete('/budgets/{budget}', [BudgetController::class, 'destroy']);
     });
 
     // Breakdown replacement / part-unit-action approval boards, read side:
