@@ -2,9 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\PartRepairDisposition;
 use App\Models\PartRepair;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Carbon;
 
 /**
  * @mixin PartRepair
@@ -35,9 +37,17 @@ class PartRepairResource extends JsonResource
                 'partInstallation',
                 fn () => $this->partInstallation?->equipment?->machine?->line?->name
             ),
+            'percent_used' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->percentUsed()),
+            'total_runtime_hours_used' => $this->whenLoaded(
+                'partUnit',
+                fn () => $this->partUnit?->totalRuntimeHoursUsed()
+            ),
             'removed_at' => $this->removed_at,
             'estimated_completion_date' => $this->estimated_completion_date,
             'disposition' => $this->disposition,
+            'is_overdue' => $this->disposition === PartRepairDisposition::InRepair
+                && $this->estimated_completion_date !== null
+                && $this->estimated_completion_date->lt(Carbon::today()),
             'repaired_at' => $this->repaired_at,
             'notes' => $this->notes,
             'reinstalled_installation_id' => $this->reinstalled_installation_id,

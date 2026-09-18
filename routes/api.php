@@ -190,7 +190,6 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
             [PartInstallationController::class, 'scheduleReplacement']
         );
 
-        Route::post('/part-units/{partUnit}/repairs', [PartRepairController::class, 'store']);
         Route::put('/part-repairs/{partRepair}', [PartRepairController::class, 'update']);
     });
 
@@ -249,5 +248,10 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::post('/users/{user}/deactivate', [UserController::class, 'deactivate']);
         Route::post('/users/{user}/activate', [UserController::class, 'activate']);
+
+        // Undoing a mistaken "Lepas" on the Repair Part board — a data-entry
+        // correction, not a routine inventory action, so it's kept as
+        // narrow as account management above.
+        Route::delete('/part-repairs/{partRepair}', [PartRepairController::class, 'destroy']);
     });
 });

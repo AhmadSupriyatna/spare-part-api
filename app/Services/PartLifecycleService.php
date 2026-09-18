@@ -159,6 +159,12 @@ class PartLifecycleService
         return $active->first();
     }
 
+    /**
+     * Removing a unit always opens its repair record in the same breath —
+     * every jalur keluar (manual "Lepas", breakdown replacement approval,
+     * WO checklist replacement) funnels through here, so "Perlu Keputusan"
+     * on the Repair Part board never needs a separate manual trigger.
+     */
     public function remove(PartInstallation $installation): PartInstallation
     {
         return DB::transaction(function () use ($installation) {
@@ -167,40 +173,18 @@ class PartLifecycleService
                 'removed_at_runtime_hours' => $installation->equipment->machine->line->runtime_hours,
             ]);
 
-            $installation->partUnit?->update(['status' => PartUnitStatus::PendingRepair]);
+            if ($installation->partUnit) {
+                $installation->partUnit->update(['status' => PartUnitStatus::PendingRepair]);
+
+                PartRepair::create([
+                    'part_unit_id' => $installation->part_unit_id,
+                    'part_installation_id' => $installation->id,
+                    'removed_at' => now(),
+                    'disposition' => PartRepairDisposition::Pending,
+                ]);
+            }
 
             return $installation;
-        });
-    }
-
-    /**
-     * Open a repair record for a removed unit — defaults to linking the
-     * unit's most recently ended installation cycle if none is given.
-     */
-    public function sendToRepair(
-        PartUnit $unit,
-        ?int $partInstallationId,
-        ?string $notes,
-        ?string $estimatedCompletionDate = null,
-    ): PartRepair {
-        return DB::transaction(function () use ($unit, $partInstallationId, $notes, $estimatedCompletionDate) {
-            $partInstallationId ??= $unit->installations()
-                ->whereNotNull('removed_at')
-                ->latest('removed_at')
-                ->value('id');
-
-            $repair = PartRepair::create([
-                'part_unit_id' => $unit->id,
-                'part_installation_id' => $partInstallationId,
-                'removed_at' => now(),
-                'estimated_completion_date' => $estimatedCompletionDate,
-                'disposition' => PartRepairDisposition::Pending,
-                'notes' => $notes,
-            ]);
-
-            $unit->update(['status' => PartUnitStatus::PendingRepair]);
-
-            return $repair;
         });
     }
 
@@ -234,6 +218,33 @@ class PartLifecycleService
             ]);
 
             return $repair;
+        });
+    }
+
+    /**
+     * Superadmin-only escape hatch for a mistaken "Lepas": undoes the
+     * removal entirely rather than just deleting the repair record — puts
+     * the installation back to active and the unit back InService, so the
+     * Repair Part board and the equipment's install history both look like
+     * the removal never happened. Refuses if the unit has since been
+     * reinstalled somewhere else (repaired and put back into service),
+     * since there'd be no single installation to restore it to.
+     */
+    public function undoRemoval(PartRepair $repair): void
+    {
+        DB::transaction(function () use ($repair) {
+            $unit = $repair->partUnit;
+
+            if ($unit && $unit->currentInstallation()) {
+                abort(422, 'Unit ini sudah dipasang kembali di instalasi lain — tidak bisa dibatalkan.');
+            }
+
+            if ($repair->partInstallation) {
+                $repair->partInstallation->update(['removed_at' => null, 'removed_at_runtime_hours' => null]);
+                $unit?->update(['status' => PartUnitStatus::InService]);
+            }
+
+            $repair->delete();
         });
     }
 }
