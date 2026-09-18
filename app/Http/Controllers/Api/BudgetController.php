@@ -9,6 +9,7 @@ use App\Http\Resources\BudgetResource;
 use App\Models\Branch;
 use App\Models\Budget;
 use App\Services\BudgetForecastService;
+use App\Services\BudgetRealizationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -16,7 +17,10 @@ use Illuminate\Http\Response;
 
 class BudgetController extends Controller
 {
-    public function __construct(private readonly BudgetForecastService $forecast) {}
+    public function __construct(
+        private readonly BudgetForecastService $forecast,
+        private readonly BudgetRealizationService $realization,
+    ) {}
 
     public function index(Request $request, Branch $branch): AnonymousResourceCollection
     {
@@ -26,7 +30,11 @@ class BudgetController extends Controller
             $query->where('year', $request->integer('year'));
         }
 
-        return BudgetResource::collection($query->get());
+        $budgets = $query->get()->each(function (Budget $budget) use ($branch) {
+            $budget->setAttribute('realization', $this->realization->calculateRealization($branch, $budget->category, $budget->year));
+        });
+
+        return BudgetResource::collection($budgets);
     }
 
     /**

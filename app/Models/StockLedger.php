@@ -32,6 +32,7 @@ class StockLedger extends Model
         'type',
         'quantity_change',
         'balance_after',
+        'unit_cost',
         'reference_type',
         'reference_id',
         'notes',
@@ -44,6 +45,7 @@ class StockLedger extends Model
         return [
             'quantity_change' => 'integer',
             'balance_after' => 'integer',
+            'unit_cost' => 'decimal:2',
             'occurred_at' => 'datetime',
         ];
     }

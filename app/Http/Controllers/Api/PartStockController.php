@@ -67,6 +67,7 @@ class PartStockController extends Controller
 
                 return $updates;
             },
+            unitCostSnapshot: (string) round($data['total_price'] / $data['quantity'], 2),
         );
 
         return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
