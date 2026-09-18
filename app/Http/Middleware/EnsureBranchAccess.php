@@ -43,7 +43,7 @@ class EnsureBranchAccess
 
         foreach ($branchIds as $branchId) {
             if (! in_array($branchId, $allowedBranchIds, true)) {
-                abort(403, 'Anda tidak memiliki akses ke cabang ini.');
+                abort(403, 'Anda tidak memiliki akses ke plant ini.');
             }
         }
 

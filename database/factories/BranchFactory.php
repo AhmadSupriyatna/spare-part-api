@@ -19,7 +19,7 @@ class BranchFactory extends Factory
     {
         return [
             'code' => strtoupper($this->faker->unique()->lexify('???')),
-            'name' => 'Cabang '.$this->faker->unique()->city(),
+            'name' => 'Plant '.$this->faker->unique()->city(),
             'address' => $this->faker->address(),
             'is_active' => true,
         ];

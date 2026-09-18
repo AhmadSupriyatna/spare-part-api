@@ -25,9 +25,9 @@ class DemoDataSeeder extends Seeder
     public function run(): void
     {
         $branches = collect([
-            ['code' => 'PUSAT', 'name' => 'Cabang Pusat'],
-            ['code' => 'JKT', 'name' => 'Cabang Jakarta'],
-            ['code' => 'SBY', 'name' => 'Cabang Surabaya'],
+            ['code' => 'PUSAT', 'name' => 'Plant Pusat'],
+            ['code' => 'JKT', 'name' => 'Plant Jakarta'],
+            ['code' => 'SBY', 'name' => 'Plant Surabaya'],
         ])->map(fn (array $attributes) => Branch::create([...$attributes, 'is_active' => true]));
 
         $parts = Part::factory()->count(15)->create();

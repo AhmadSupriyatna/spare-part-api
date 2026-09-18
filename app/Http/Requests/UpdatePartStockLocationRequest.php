@@ -39,7 +39,7 @@ class UpdatePartStockLocationRequest extends FormRequest
                 ->exists();
 
             if (! $belongsToSameBranch) {
-                $validator->errors()->add('location_id', 'Lokasi tersebut bukan milik cabang yang sama dengan stok ini.');
+                $validator->errors()->add('location_id', 'Lokasi tersebut bukan milik plant yang sama dengan stok ini.');
             }
         });
     }

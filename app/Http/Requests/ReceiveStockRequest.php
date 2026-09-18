@@ -39,7 +39,7 @@ class ReceiveStockRequest extends FormRequest
                     ->exists();
 
                 if (! $belongsToSameBranch) {
-                    $validator->errors()->add('supplier_id', 'Supplier tersebut bukan milik cabang yang sama dengan stok ini.');
+                    $validator->errors()->add('supplier_id', 'Supplier tersebut bukan milik plant yang sama dengan stok ini.');
                 }
             }
         });
