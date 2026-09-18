@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\BudgetController;
+use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CompanySettingController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\LineController;
@@ -66,6 +67,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     Route::apiResource('branches', BranchController::class)->only(['index', 'show']);
     Route::apiResource('parts', PartController::class)->only(['index', 'show']);
     Route::get('/units', [UnitController::class, 'index']);
+    Route::get('/categories', [CategoryController::class, 'index']);
     Route::get('/settings/company', [CompanySettingController::class, 'show']);
     Route::get('/branches/{branch}/suppliers', [SupplierController::class, 'index']);
     Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
@@ -143,6 +145,9 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::post('/units', [UnitController::class, 'store']);
         Route::put('/units/{unit}', [UnitController::class, 'update']);
         Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+        Route::post('/categories', [CategoryController::class, 'store']);
+        Route::put('/categories/{category}', [CategoryController::class, 'update']);
+        Route::delete('/categories/{category}', [CategoryController::class, 'destroy']);
         Route::put('/settings/company', [CompanySettingController::class, 'update']);
         Route::post('/branches/{branch}/suppliers', [SupplierController::class, 'store']);
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
