@@ -84,11 +84,11 @@ class PartInstallationController extends Controller
     }
 
     /**
-     * Install a part onto an equipment — either a brand-new unit (no
-     * part_unit_id given) or an existing repaired one being put back into
-     * service. Multiple simultaneous units of the same part can be active
-     * on one equipment at once; nothing here auto-closes another
-     * installation just for sharing the same part_id.
+     * Install a brand-new unit of a part onto an equipment (initial setup /
+     * genuinely new stock — see StorePartInstallationRequest for why this
+     * never accepts an existing repaired unit). Multiple simultaneous units
+     * of the same part can be active on one equipment at once; nothing here
+     * auto-closes another installation just for sharing the same part_id.
      */
     public function store(StorePartInstallationRequest $request, Equipment $equipment): PartInstallationResource|JsonResponse
     {
