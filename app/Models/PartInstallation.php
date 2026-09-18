@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use App\Enums\TaskStatus;
+use App\Models\Concerns\LogsDefaultActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PartInstallation extends Model
 {
+    use LogsDefaultActivity;
+
     protected $fillable = [
         'equipment_id',
         'part_id',

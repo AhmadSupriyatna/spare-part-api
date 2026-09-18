@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use App\Enums\PartRepairDisposition;
+use App\Models\Concerns\LogsDefaultActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PartRepair extends Model
 {
+    use LogsDefaultActivity;
+
     protected $fillable = [
         'part_unit_id',
         'part_installation_id',

@@ -4,11 +4,14 @@ namespace App\Models;
 
 use App\Enums\PartUnitActionType;
 use App\Enums\ReplacementRequestStatus;
+use App\Models\Concerns\LogsDefaultActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PartUnitActionRequest extends Model
 {
+    use LogsDefaultActivity;
+
     protected $fillable = [
         'part_unit_id',
         'action',

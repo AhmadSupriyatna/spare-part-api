@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\BudgetController;
@@ -233,6 +234,8 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
         Route::post('/branches/{branch}/budgets', [BudgetController::class, 'store']);
         Route::put('/budgets/{budget}', [BudgetController::class, 'update']);
         Route::delete('/budgets/{budget}', [BudgetController::class, 'destroy']);
+
+        Route::get('/branches/{branch}/activity-log', [ActivityLogController::class, 'index']);
     });
 
     // Breakdown replacement / part-unit-action approval boards, read side:

@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use App\Enums\ReplacementRequestStatus;
+use App\Models\Concerns\LogsDefaultActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PartReplacementRequest extends Model
 {
+    use LogsDefaultActivity;
+
     protected $fillable = [
         'part_id',
         'equipment_id',
