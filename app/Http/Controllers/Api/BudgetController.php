@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class BudgetController extends Controller
 {
@@ -24,54 +25,87 @@ class BudgetController extends Controller
 
     public function index(Request $request, Branch $branch): AnonymousResourceCollection
     {
-        $query = $branch->budgets()->with('creator')->orderByDesc('year')->orderBy('category');
+        $query = $branch->budgets()->with(['creator', 'items.part'])->orderByDesc('year')->orderBy('category');
 
         if ($request->filled('year')) {
             $query->where('year', $request->integer('year'));
         }
 
         $budgets = $query->get()->each(function (Budget $budget) use ($branch) {
-            $budget->setAttribute('realization', $this->realization->calculateRealization($branch, $budget->category, $budget->year));
+            $budget->setAttribute(
+                'realization',
+                $this->realization->calculateRealization($branch, $budget->category, $budget->year)
+            );
+            $this->attachLineBreakdowns($budget, $branch);
         });
 
         return BudgetResource::collection($budgets);
     }
 
     /**
-     * The lifetime-based suggestion behind the "Hitung Estimasi" button —
-     * doesn't persist anything, just returns a number (plus the per-part
-     * breakdown and which parts couldn't be forecast) for the form to
-     * pre-fill. The user still saves the actual budget via store().
+     * Parts in this category (branch-wide) that currently have an active
+     * installation, with current unit cost — what the budget input drawer
+     * renders as the per-part input rows, before the user has entered
+     * anything.
      */
-    public function estimate(Request $request, Branch $branch): JsonResponse
+    public function partsForCategory(Request $request, Branch $branch): JsonResponse
     {
         $category = (string) $request->string('category');
 
-        return response()->json(
-            $this->forecast->estimateCategoryBudget($branch, $category)
-        );
+        return response()->json(['data' => $this->forecast->partsForCategory($branch, $category)]);
     }
 
     public function store(StoreBudgetRequest $request, Branch $branch): BudgetResource
     {
-        $budget = $branch->budgets()->create([
-            ...$request->validated(),
-            'category' => $request->validated('category') ?: '',
-            'corrective_amount' => $request->validated('corrective_amount') ?: 0,
-            'created_by' => $request->user()->id,
-        ]);
+        $data = $request->validated();
 
-        return new BudgetResource($budget->load('creator'));
+        $budget = DB::transaction(function () use ($data, $branch, $request) {
+            $priced = $this->forecast->priceItems($branch, $data['items']);
+
+            $budget = $branch->budgets()->create([
+                'category' => $data['category'] ?: '',
+                'year' => $data['year'],
+                'planned_amount' => $priced['planned_amount'],
+                'corrective_amount' => $data['corrective_amount'] ?? 0,
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $request->user()->id,
+            ]);
+
+            $budget->items()->createMany($priced['items']);
+
+            return $budget;
+        });
+
+        $budget->load(['creator', 'items.part']);
+        $this->attachLineBreakdowns($budget, $branch);
+
+        return new BudgetResource($budget);
     }
 
     public function update(UpdateBudgetRequest $request, Budget $budget): BudgetResource
     {
-        $budget->update([
-            ...$request->validated(),
-            'corrective_amount' => $request->validated('corrective_amount') ?: 0,
-        ]);
+        $data = $request->validated();
 
-        return new BudgetResource($budget->load('creator'));
+        DB::transaction(function () use ($data, $budget) {
+            $updates = [
+                'corrective_amount' => $data['corrective_amount'] ?? 0,
+                'notes' => $data['notes'] ?? null,
+            ];
+
+            if (isset($data['items'])) {
+                $priced = $this->forecast->priceItems($budget->branch, $data['items']);
+                $updates['planned_amount'] = $priced['planned_amount'];
+                $budget->items()->delete();
+                $budget->items()->createMany($priced['items']);
+            }
+
+            $budget->update($updates);
+        });
+
+        $budget->load(['creator', 'items.part']);
+        $this->attachLineBreakdowns($budget, $budget->branch);
+
+        return new BudgetResource($budget);
     }
 
     public function destroy(Budget $budget): Response
@@ -79,5 +113,21 @@ class BudgetController extends Controller
         $budget->delete();
 
         return response()->noContent();
+    }
+
+    private function attachLineBreakdowns(Budget $budget, Branch $branch): void
+    {
+        foreach ($budget->items as $item) {
+            if (! $item->part) {
+                continue;
+            }
+
+            $item->setAttribute('by_line', $this->forecast->lineBreakdown(
+                $branch,
+                $item->part,
+                (float) $item->estimated_lifetime_percent,
+                (float) $item->price_increase_percent,
+            ));
+        }
     }
 }

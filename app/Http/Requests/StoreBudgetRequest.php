@@ -31,7 +31,10 @@ class StoreBudgetRequest extends FormRequest
                     ->where('branch_id', $branch?->id)
                     ->where('category', $this->input('category') ?: '')),
             ],
-            'planned_amount' => ['required', 'numeric', 'min:0'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.part_id' => ['required', 'integer', 'exists:parts,id'],
+            'items.*.estimated_lifetime_percent' => ['required', 'numeric', 'min:1'],
+            'items.*.price_increase_percent' => ['nullable', 'numeric', 'min:0'],
             'corrective_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
         ];

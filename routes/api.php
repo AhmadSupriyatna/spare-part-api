@@ -231,7 +231,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         // Budget is a planning/finance concern — Admin Spare Part sets it,
         // Supervisor oversees it, Engineer has no reason to see or touch it.
         Route::get('/branches/{branch}/budgets', [BudgetController::class, 'index']);
-        Route::get('/branches/{branch}/budgets/estimate', [BudgetController::class, 'estimate']);
+        Route::get('/branches/{branch}/budgets/parts', [BudgetController::class, 'partsForCategory']);
         Route::post('/branches/{branch}/budgets', [BudgetController::class, 'store']);
         Route::put('/budgets/{budget}', [BudgetController::class, 'update']);
         Route::delete('/budgets/{budget}', [BudgetController::class, 'destroy']);

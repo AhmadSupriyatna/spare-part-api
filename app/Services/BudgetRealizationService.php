@@ -57,9 +57,7 @@ class BudgetRealizationService
 
             $cost = bcmul((string) $entry->unit_cost, (string) abs($entry->quantity_change), 2);
 
-            if ($entry->reference_type === Task::class) {
-                $planned = bcadd($planned, $cost, 2);
-            } elseif ($entry->reference_type === PartReplacementRequest::class) {
+            if ($entry->reference_type === PartReplacementRequest::class) {
                 $unplanned = bcadd($unplanned, $cost, 2);
             } else {
                 $planned = bcadd($planned, $cost, 2);

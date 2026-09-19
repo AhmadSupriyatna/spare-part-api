@@ -21,6 +21,7 @@ class BudgetResource extends JsonResource
             'planned_amount' => $this->planned_amount,
             'corrective_amount' => $this->corrective_amount,
             'total_amount' => $this->totalAmount(),
+            'items' => BudgetItemResource::collection($this->whenLoaded('items')),
             'actual_planned' => $this->when(isset($this->realization), fn () => $this->realization['planned']),
             'actual_unplanned' => $this->when(isset($this->realization), fn () => $this->realization['unplanned']),
             'actual_total' => $this->when(isset($this->realization), fn () => $this->realization['total']),
