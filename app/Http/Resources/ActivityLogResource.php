@@ -69,17 +69,16 @@ class ActivityLogResource extends JsonResource
 
     private function humanDescription(string $subjectLabel): string
     {
-        $who = $this->causer?->name ?? 'Sistem';
         $what = match ($this->event) {
-            'created' => 'menambahkan',
-            'updated' => 'mengubah',
-            'deleted' => 'menghapus',
+            'created' => 'Menambahkan',
+            'updated' => 'Mengubah',
+            'deleted' => 'Menghapus',
             default => (string) $this->event,
         };
         $display = $this->subjectDisplay();
         $target = $display ? "{$subjectLabel} \"{$display}\"" : "{$subjectLabel} #{$this->subject_id}";
 
-        return "{$who} {$what} {$target}";
+        return "{$what} {$target}";
     }
 
     /**
