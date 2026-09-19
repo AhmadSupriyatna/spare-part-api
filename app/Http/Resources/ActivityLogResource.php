@@ -23,7 +23,7 @@ class ActivityLogResource extends JsonResource
         'Location' => 'Bin',
     ];
 
-    private const DISPLAY_FIELDS = ['name', 'code', 'title', 'slot_label', 'category'];
+    private const DISPLAY_FIELDS = ['name', 'code', 'label', 'title', 'slot_label', 'category'];
 
     /**
      * @return array<string, mixed>

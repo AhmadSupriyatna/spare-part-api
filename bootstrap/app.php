@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureBranchAccess;
+use App\Http\Middleware\TrackUserActivity;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'branch.access' => EnsureBranchAccess::class,
+            'track.activity' => TrackUserActivity::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

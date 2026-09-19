@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Branch;
 use App\Models\User;
 use App\Services\UserAvatarService;
 use Illuminate\Http\Request;
@@ -93,5 +94,28 @@ class UserController extends Controller
         $user->update(['is_active' => true]);
 
         return new UserResource($user->load('branches'));
+    }
+
+    /**
+     * "User aktif sekarang" for the Dashboard — active accounts whose
+     * last_active_at (stamped by TrackUserActivity on every authenticated
+     * request) falls inside a 5-minute window, assigned to this branch.
+     * Superadmin is included regardless of the branch_user pivot, same as
+     * everywhere else it's treated as belonging to every branch.
+     */
+    public function activeForBranch(Branch $branch): AnonymousResourceCollection
+    {
+        $users = User::query()
+            ->with('branches')
+            ->where('is_active', true)
+            ->where('last_active_at', '>=', now()->subMinutes(5))
+            ->where(function ($query) use ($branch) {
+                $query->whereHas('branches', fn ($q) => $q->where('branches.id', $branch->id))
+                    ->orWhereHas('roles', fn ($q) => $q->where('name', 'superadmin'));
+            })
+            ->orderByDesc('last_active_at')
+            ->get();
+
+        return UserResource::collection($users);
     }
 }

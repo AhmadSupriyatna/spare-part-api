@@ -22,6 +22,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'avatar_url' => $this->avatarUrl(),
             'is_active' => $this->is_active,
+            'last_active_at' => $this->last_active_at,
             'roles' => $this->getRoleNames(),
             'branches' => $this->whenLoaded(
                 'branches',

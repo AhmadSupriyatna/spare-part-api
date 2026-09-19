@@ -59,7 +59,7 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
 // bound models don't resolve to a branch at all (global lists like
 // GET /parts, GET /tasks/mine) — safe to apply blanket-wide rather than
 // threading it into each sub-group below.
-Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
+Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'me']);
     Route::get('/search', [SearchController::class, 'index']);
@@ -69,6 +69,7 @@ Route::middleware(['auth:sanctum', 'branch.access'])->group(function () {
     Route::apiResource('parts', PartController::class)->only(['index', 'show']);
     Route::get('/units', [UnitController::class, 'index']);
     Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/branches/{branch}/active-users', [UserController::class, 'activeForBranch']);
     Route::get('/settings/company', [CompanySettingController::class, 'show']);
     Route::get('/branches/{branch}/suppliers', [SupplierController::class, 'index']);
     Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
