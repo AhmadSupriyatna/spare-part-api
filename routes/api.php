@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CompanySettingController;
+use App\Http\Controllers\Api\DatabaseBackupController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\LineController;
 use App\Http\Controllers\Api\LocationController;
@@ -282,5 +283,16 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::post('/branches/{branch}/archive', [BranchController::class, 'archive']);
         Route::post('/branches/{branch}/unarchive', [BranchController::class, 'unarchive']);
         Route::delete('/branches/{branch}', [BranchController::class, 'destroy']);
+
+        // Full-database backup/restore — a pure-PHP JSON dump/reload, not
+        // pg_dump/psql (neither is on PATH here, and there's no guarantee
+        // either is on every machine this app runs on). Restore replaces
+        // every table in the file, so it's gated the same as the other
+        // widest-blast-radius actions above. Per-branch export is
+        // read-only/archival — see DatabaseBackupService for why there's
+        // no matching per-branch import.
+        Route::get('/admin/backup', [DatabaseBackupController::class, 'backup']);
+        Route::post('/admin/restore', [DatabaseBackupController::class, 'restore']);
+        Route::get('/branches/{branch}/backup', [DatabaseBackupController::class, 'backupBranch']);
     });
 });
