@@ -163,6 +163,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::delete('/rack-levels/{rackLevel}', [RackLevelController::class, 'destroy']);
         Route::post('/rack-levels/{rackLevel}/locations', [LocationController::class, 'store']);
 
+        Route::post('/branches/{branch}/part-stocks', [PartStockController::class, 'store']);
         Route::post('/part-stocks/{partStock}/receive', [PartStockController::class, 'receive']);
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])
             ->middleware('throttle:stock-adjustment');

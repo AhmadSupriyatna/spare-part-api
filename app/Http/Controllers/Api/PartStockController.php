@@ -6,6 +6,7 @@ use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AdjustStockRequest;
 use App\Http\Requests\ReceiveStockRequest;
+use App\Http\Requests\StorePartStockRequest;
 use App\Http\Requests\UpdatePartStockLocationRequest;
 use App\Http\Resources\PartStockResource;
 use App\Http\Resources\StockLedgerReportResource;
@@ -16,6 +17,7 @@ use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\StockMovementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,13 +48,47 @@ class PartStockController extends Controller
      */
     public function receive(ReceiveStockRequest $request, PartStock $partStock): JsonResponse
     {
+        $this->recordReceiving($partStock, $request->validated(), $request->user());
+
+        return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
+            ->response()
+            ->setStatusCode(200);
+    }
+
+    /**
+     * Same "receive" flow as above, but for a part that may not have a
+     * part_stocks row for this branch yet — the standalone Stock In page
+     * lists the whole part catalog, not just parts already stocked here, so
+     * this is what actually brings a part into a branch's stock the first
+     * time (firstOrCreate, so receiving an already-stocked part here just
+     * tops it up exactly like the row-level "Terima Barang" button does).
+     */
+    public function store(StorePartStockRequest $request, Branch $branch): JsonResponse
+    {
         $data = $request->validated();
 
+        $partStock = PartStock::firstOrCreate([
+            'part_id' => $data['part_id'],
+            'branch_id' => $branch->id,
+        ]);
+
+        $this->recordReceiving($partStock, $data, $request->user());
+
+        return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /**
+     * @param  array{quantity: int, total_price: float|string, supplier_id?: int|null, notes?: string|null}  $data
+     */
+    private function recordReceiving(PartStock $partStock, array $data, ?User $user): void
+    {
         $this->stockMovements->record(
             partStock: $partStock,
             type: StockLedger::TYPE_RECEIVING,
             quantityChange: $data['quantity'],
-            user: $request->user(),
+            user: $user,
             notes: $data['notes'] ?? null,
             additionalUpdates: function (PartStock $locked, int $newBalance) use ($data) {
                 $costBasis = ((float) $locked->unit_cost * $locked->quantity_on_hand) + $data['total_price'];
@@ -69,10 +105,6 @@ class PartStockController extends Controller
             },
             unitCostSnapshot: (string) round($data['total_price'] / $data['quantity'], 2),
         );
-
-        return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
-            ->response()
-            ->setStatusCode(200);
     }
 
     public function adjust(AdjustStockRequest $request, PartStock $partStock): JsonResponse
