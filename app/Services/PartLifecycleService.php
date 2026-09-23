@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PartRepairDisposition;
 use App\Enums\PartUnitStatus;
 use App\Exceptions\AmbiguousInstallationException;
+use App\Exceptions\InvalidOldInstallationException;
 use App\Exceptions\PartUnitAlreadyInstalledException;
 use App\Models\Equipment;
 use App\Models\PartInstallation;
@@ -136,14 +137,33 @@ class PartLifecycleService
      * installation (created moments earlier in the same request) would
      * itself look like a pre-existing "old" one to close out.
      *
+     * An explicit $oldInstallationId is never trusted at face value — it must
+     * actually belong to this equipment and part, and still be active
+     * (removed_at IS NULL), locked for update so a concurrent call can't
+     * claim the same row. Anything else (wrong equipment, wrong part,
+     * already removed) is rejected outright rather than silently falling
+     * back to "no old installation."
+     *
      * @param  int[]  $excludeIds
      *
      * @throws AmbiguousInstallationException
+     * @throws InvalidOldInstallationException
      */
     public function resolveActiveInstallation(Equipment $equipment, int $partId, ?int $oldInstallationId, array $excludeIds = []): ?PartInstallation
     {
         if ($oldInstallationId) {
-            return PartInstallation::whereKey($oldInstallationId)->first();
+            $installation = PartInstallation::whereKey($oldInstallationId)
+                ->where('equipment_id', $equipment->id)
+                ->where('part_id', $partId)
+                ->whereNull('removed_at')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $installation) {
+                throw new InvalidOldInstallationException($oldInstallationId);
+            }
+
+            return $installation;
         }
 
         $active = $equipment->partInstallations()

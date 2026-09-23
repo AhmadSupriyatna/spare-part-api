@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Enums\ScheduleType;
 use App\Enums\TaskStatus;
 use App\Exceptions\AmbiguousInstallationException;
+use App\Exceptions\ChecklistPartMismatchException;
+use App\Exceptions\PartStockBranchMismatchException;
 use App\Exceptions\PartStockNotFoundException;
 use App\Models\PartStock;
 use App\Models\StockLedger;
@@ -79,8 +81,20 @@ class TaskService
                 }
 
                 if ($task->part_stock_id && $task->quantity_used) {
+                    $partStock = $task->partStock;
+                    $branchId = $task->equipment->machine->line->branch_id;
+
+                    // Never trust that a submitted (or pre-filled) part_stock_id
+                    // actually belongs to this task's own equipment's plant —
+                    // checked here, before StockMovementService is ever called,
+                    // so a mismatched stock can't be issued against the wrong
+                    // branch's ledger.
+                    if ($partStock->branch_id !== $branchId) {
+                        throw new PartStockBranchMismatchException($partStock->id, $branchId);
+                    }
+
                     $this->stockMovements->record(
-                        partStock: $task->partStock,
+                        partStock: $partStock,
                         type: StockLedger::TYPE_ISSUE,
                         quantityChange: -$task->quantity_used,
                         user: $user,
@@ -113,6 +127,26 @@ class TaskService
     private function completeChecklist(Task $task, ?User $user, array $checks): void
     {
         $branchId = $task->equipment->machine->line->branch_id;
+
+        // The client says which part a checklist row is for, but that's
+        // never trusted at face value — it must match what the actual
+        // TaskPartCheck row already has on file, checked before anything
+        // else in this method runs (including the old-installation
+        // resolution pass below, which also keys off $check['part_id']).
+        // Otherwise a spoofed part_id could make this method act on a
+        // completely different part than what was actually scheduled.
+        $taskPartChecks = TaskPartCheck::where('task_id', $task->id)
+            ->whereIn('id', collect($checks)->pluck('id'))
+            ->get()
+            ->keyBy('id');
+
+        foreach ($checks as $check) {
+            $partCheck = $taskPartChecks->get($check['id']);
+
+            if (! $partCheck || $partCheck->part_id !== $check['part_id']) {
+                throw new ChecklistPartMismatchException($check['id']);
+            }
+        }
 
         // Resolve "which old installation is this closing" for every
         // replaced check up front, before any of this batch's own

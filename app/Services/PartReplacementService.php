@@ -107,7 +107,7 @@ class PartReplacementService
                 type: StockLedger::TYPE_ISSUE,
                 quantityChange: -$locked->quantity_used,
                 user: $reviewer,
-                notes: "Penggantian breakdown oleh {$locked->requested_by_name}",
+                notes: "{$eventLabel}: penggantian oleh {$locked->requested_by_name}",
                 reference: $locked,
             );
 
