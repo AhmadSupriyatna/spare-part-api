@@ -81,6 +81,7 @@ class PartRepairController extends Controller
             $target,
             $data['notes'] ?? null,
             $data['estimated_completion_date'] ?? null,
+            isset($data['repair_cost']) ? (string) $data['repair_cost'] : null,
         );
 
         return new PartRepairResource(

@@ -49,6 +49,7 @@ class PartRepairResource extends JsonResource
                 && $this->estimated_completion_date !== null
                 && $this->estimated_completion_date->lt(Carbon::today()),
             'repaired_at' => $this->repaired_at,
+            'repair_cost' => $this->repair_cost,
             'notes' => $this->notes,
             'reinstalled_installation_id' => $this->reinstalled_installation_id,
             'created_at' => $this->created_at,

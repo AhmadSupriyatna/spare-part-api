@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\PartReplacementRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\PartReplacementRequest
+ * @mixin PartReplacementRequest
  */
 class PartReplacementRequestResource extends JsonResource
 {
@@ -30,12 +31,14 @@ class PartReplacementRequestResource extends JsonResource
                 fn () => $this->equipment?->machine?->line?->branch?->name
             ),
             'quantity_used' => $this->quantity_used,
+            'event_type' => $this->event_type->value,
             'requested_by_name' => $this->requested_by_name,
             'reason' => $this->reason,
             'status' => $this->status,
             'reviewed_by_name' => $this->whenLoaded('reviewedBy', fn () => $this->reviewedBy?->name),
             'reviewed_at' => $this->reviewed_at,
             'review_notes' => $this->review_notes,
+            'items' => PartReplacementRequestItemResource::collection($this->whenLoaded('items')),
             'created_at' => $this->created_at,
         ];
     }

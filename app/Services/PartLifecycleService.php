@@ -192,20 +192,25 @@ class PartLifecycleService
      * Move a repair record forward: in_repair while work is happening,
      * repaired once it's ready to go back into service (the unit becomes
      * "available" for the next install), or scrapped (terminal — the unit
-     * can never be installed again).
+     * can never be installed again). $repairCost is purely a history field
+     * (how much this physical repair cost) — it never feeds into any
+     * lifetime/budget formula, and is left untouched when not provided so a
+     * later edit (e.g. correcting the ETA) doesn't accidentally blank it.
      */
     public function updateDisposition(
         PartRepair $repair,
         PartRepairDisposition $disposition,
         ?string $notes = null,
         ?string $estimatedCompletionDate = null,
+        ?string $repairCost = null,
     ): PartRepair {
-        return DB::transaction(function () use ($repair, $disposition, $notes, $estimatedCompletionDate) {
+        return DB::transaction(function () use ($repair, $disposition, $notes, $estimatedCompletionDate, $repairCost) {
             $repair->update([
                 'disposition' => $disposition,
                 'notes' => $notes ?? $repair->notes,
                 'estimated_completion_date' => $estimatedCompletionDate ?? $repair->estimated_completion_date,
                 'repaired_at' => $disposition === PartRepairDisposition::Repaired ? now() : $repair->repaired_at,
+                'repair_cost' => $repairCost ?? $repair->repair_cost,
             ]);
 
             $repair->partUnit->update([

@@ -4,24 +4,28 @@ namespace App\Services;
 
 use App\Enums\ReplacementRequestStatus;
 use App\Exceptions\AmbiguousInstallationException;
+use App\Exceptions\InvalidReplacementSelectionException;
 use App\Exceptions\PartStockNotFoundException;
 use App\Exceptions\ReplacementRequestAlreadyReviewedException;
+use App\Models\Equipment;
+use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
+use App\Models\PartReplacementRequestItem;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Approving a breakdown replacement request does three things atomically:
- * closes whatever installation of that part is currently active on the
- * equipment (if any, resolved the same way as every other jalur keluar —
- * see PartLifecycleService::resolveActiveInstallation()), opens a new one
- * through PartLifecycleService (so it gets a PartUnit like every other
- * install path, closing the gap where breakdown-replaced parts used to
- * fall outside the life-cycle/repair system entirely), and issues the part
- * out of that branch's stock — the same ledger-backed path every other
- * stock consumption in the app goes through.
+ * Approving a breakdown replacement request does the following atomically,
+ * for every physical unit involved (one for a plain quantity_used = 1
+ * request, N for a multi-unit one): closes the old installation (if any),
+ * opens a new one through PartLifecycleService (so it gets a PartUnit like
+ * every other install path, and inherits the old installation's slot_label),
+ * records one old->new pairing row, and issues the part out of that
+ * branch's stock exactly once for the whole request's quantity_used — never
+ * once per unit, so the ledger reflects one real transaction, not N.
  */
 class PartReplacementService
 {
@@ -31,19 +35,27 @@ class PartReplacementService
     ) {}
 
     /**
+     * @param  int[]  $oldInstallationIds  Which currently-active installations of this part on this
+     *                                     equipment are being closed out. For a quantity_used = 1 request this may be
+     *                                     left empty (auto-resolved, same as before — throws AmbiguousInstallationException
+     *                                     if more than one is active). For quantity_used > 1 it's mandatory: exactly
+     *                                     quantity_used distinct, active installations of this part on this equipment.
+     *
      * @throws PartStockNotFoundException if the part has no stock record in the equipment's branch.
      * @throws ReplacementRequestAlreadyReviewedException if this request was already approved/rejected —
      *                                                    guards against a double-click or two reviewers processing the same request at once.
-     * @throws AmbiguousInstallationException if the equipment has more than one active installation of
-     *                                        this part and $oldInstallationId wasn't given — the approver must pick which unit (A/B/C).
+     * @throws AmbiguousInstallationException if quantity_used = 1, the equipment has more than one active
+     *                                        installation of this part, and no explicit pick was given.
+     * @throws InvalidReplacementSelectionException if the picked installations don't satisfy quantity_used
+     *                                              (wrong count, a duplicate, or not actually an active installation of this part/equipment).
      */
     public function approve(
         PartReplacementRequest $request,
         User $reviewer,
         ?string $notes = null,
-        ?int $oldInstallationId = null,
+        array $oldInstallationIds = [],
     ): PartReplacementRequest {
-        return DB::transaction(function () use ($request, $reviewer, $notes, $oldInstallationId) {
+        return DB::transaction(function () use ($request, $reviewer, $notes, $oldInstallationIds) {
             // Lock the request row itself so a concurrent approve/reject on the
             // same id can't slip through the status check below before this
             // transaction commits.
@@ -64,22 +76,30 @@ class PartReplacementService
                 throw new PartStockNotFoundException($locked->part_id, $branchId);
             }
 
-            $oldInstallation = $this->lifecycle->resolveActiveInstallation($equipment, $locked->part_id, $oldInstallationId);
+            $oldInstallations = $this->resolveOldInstallations($locked, $equipment, $oldInstallationIds);
 
-            if ($oldInstallation) {
-                $this->lifecycle->remove($oldInstallation);
+            $pairs = [];
+
+            foreach ($oldInstallations as $oldInstallation) {
+                if ($oldInstallation) {
+                    $this->lifecycle->remove($oldInstallation);
+                }
+
+                // Always a brand-new unit off the shelf — breakdown has no way
+                // to scan/identify a specific repaired unit going back in,
+                // that's what the separate QR-per-unit reinstall flow is for.
+                $newInstallation = $this->lifecycle->install($equipment, [
+                    'part_id' => $locked->part_id,
+                    'replacing_installation_id' => $oldInstallation?->id,
+                    'notes' => "Breakdown: diajukan oleh {$locked->requested_by_name}".
+                        ($locked->reason ? " — {$locked->reason}" : ''),
+                ], $reviewer);
+
+                $pairs[] = ['old' => $oldInstallation, 'new' => $newInstallation];
             }
 
-            // Always a brand-new unit off the shelf — breakdown has no way to
-            // scan/identify a specific repaired unit going back in, that's
-            // what the separate QR-per-unit reinstall flow is for.
-            $installation = $this->lifecycle->install($equipment, [
-                'part_id' => $locked->part_id,
-                'replacing_installation_id' => $oldInstallation?->id,
-                'notes' => "Breakdown: diajukan oleh {$locked->requested_by_name}".
-                    ($locked->reason ? " — {$locked->reason}" : ''),
-            ], $reviewer);
-
+            // One stock movement for the whole request, regardless of how many
+            // units it covers — never one per unit.
             $this->stockMovements->record(
                 partStock: $partStock,
                 type: StockLedger::TYPE_ISSUE,
@@ -89,16 +109,77 @@ class PartReplacementService
                 reference: $locked,
             );
 
+            foreach ($pairs as $pair) {
+                PartReplacementRequestItem::create([
+                    'replacement_request_id' => $locked->id,
+                    'old_installation_id' => $pair['old']?->id,
+                    'new_installation_id' => $pair['new']->id,
+                ]);
+            }
+
             $locked->update([
                 'status' => ReplacementRequestStatus::Approved,
                 'reviewed_by' => $reviewer->id,
                 'reviewed_at' => now(),
                 'review_notes' => $notes,
-                'part_installation_id' => $installation->id,
+                'part_installation_id' => $pairs[0]['new']->id,
             ]);
 
             return $locked;
         });
+    }
+
+    /**
+     * @param  int[]  $oldInstallationIds
+     * @return Collection<int, PartInstallation|null>
+     */
+    private function resolveOldInstallations(PartReplacementRequest $request, Equipment $equipment, array $oldInstallationIds): Collection
+    {
+        if ($request->quantity_used === 1) {
+            if (count($oldInstallationIds) > 1) {
+                throw new InvalidReplacementSelectionException('Jumlah unit yang dipilih harus tepat 1.');
+            }
+
+            // Preserves the exact legacy behaviour: an explicit pick wins,
+            // otherwise auto-resolve (throws AmbiguousInstallationException if
+            // more than one is active), and it's fine for there to be no old
+            // installation to close out at all — a new one still gets
+            // installed either way.
+            $old = $this->lifecycle->resolveActiveInstallation($equipment, $request->part_id, $oldInstallationIds[0] ?? null);
+
+            return collect([$old]);
+        }
+
+        if (empty($oldInstallationIds)) {
+            throw new InvalidReplacementSelectionException(
+                "Pilih {$request->quantity_used} unit yang akan diganti."
+            );
+        }
+
+        if (count($oldInstallationIds) !== count(array_unique($oldInstallationIds))) {
+            throw new InvalidReplacementSelectionException('Tidak boleh memilih unit yang sama dua kali.');
+        }
+
+        if (count($oldInstallationIds) !== $request->quantity_used) {
+            throw new InvalidReplacementSelectionException(
+                "Jumlah unit yang dipilih harus tepat {$request->quantity_used}."
+            );
+        }
+
+        $installations = PartInstallation::whereIn('id', $oldInstallationIds)
+            ->where('equipment_id', $equipment->id)
+            ->where('part_id', $request->part_id)
+            ->whereNull('removed_at')
+            ->lockForUpdate()
+            ->get();
+
+        if ($installations->count() !== count($oldInstallationIds)) {
+            throw new InvalidReplacementSelectionException(
+                'Salah satu unit yang dipilih tidak valid — bukan milik equipment/part ini, atau sudah tidak aktif.'
+            );
+        }
+
+        return $installations->values();
     }
 
     /**

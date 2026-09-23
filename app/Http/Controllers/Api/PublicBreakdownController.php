@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ReplacementRequestEventType;
 use App\Enums\ReplacementRequestStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreReplacementRequestRequest;
@@ -66,7 +67,11 @@ class PublicBreakdownController extends Controller
      * right now — read from real PartInstallation records, the same data
      * the Line > Equipment > Part page shows, not a separately-maintained
      * BOM spec — and (b) lives in the branch the QR was printed for, never
-     * the full factory hierarchy.
+     * the full factory hierarchy. Each row also carries how many units of
+     * this part are actually active on it right now
+     * (active_installation_count), which the scan form uses as the hard
+     * ceiling for quantity_used — the same count
+     * StoreReplacementRequestRequest re-validates server-side.
      */
     public function equipmentForPartInBranch(Part $part, Branch $branch): AnonymousResourceCollection
     {
@@ -74,17 +79,33 @@ class PublicBreakdownController extends Controller
             ->where('is_active', true)
             ->whereHas('partInstallations', fn ($q) => $q->where('part_id', $part->id)->whereNull('removed_at'))
             ->whereHas('machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+            ->withCount(['partInstallations as active_installation_count' => fn ($q) => $q
+                ->where('part_id', $part->id)
+                ->whereNull('removed_at')])
             ->with('machine.line')
             ->get();
 
         return EquipmentResource::collection($equipment);
     }
 
+    /**
+     * event_type is decided here, server-side, from the part's own
+     * replacement_strategy as it stands right now in the database — never
+     * from anything the client sends (StoreReplacementRequestRequest
+     * doesn't even validate an event_type field, so $request->validated()
+     * can't carry one through). QR Scan is one flow for the operator
+     * either way; this only tags which kind of event it turned out to be,
+     * for Phase 2 (Failure Management vs Breakdown Management) to branch on.
+     */
     public function store(StoreReplacementRequestRequest $request): JsonResponse
     {
+        $data = $request->validated();
+        $part = Part::findOrFail($data['part_id']);
+
         $replacementRequest = PartReplacementRequest::create([
-            ...$request->validated(),
+            ...$data,
             'status' => ReplacementRequestStatus::Pending,
+            'event_type' => ReplacementRequestEventType::fromReplacementStrategy($part->replacement_strategy),
         ]);
 
         return response()->json([

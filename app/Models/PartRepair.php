@@ -18,6 +18,7 @@ class PartRepair extends Model
         'estimated_completion_date',
         'disposition',
         'repaired_at',
+        'repair_cost',
         'notes',
         'reinstalled_installation_id',
     ];
@@ -29,6 +30,7 @@ class PartRepair extends Model
             'removed_at' => 'datetime',
             'estimated_completion_date' => 'date',
             'repaired_at' => 'datetime',
+            'repair_cost' => 'decimal:2',
         ];
     }
 

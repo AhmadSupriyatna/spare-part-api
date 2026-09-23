@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Equipment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\Equipment
+ * @mixin Equipment
  */
 class EquipmentResource extends JsonResource
 {
@@ -25,6 +26,14 @@ class EquipmentResource extends JsonResource
             'name' => $this->name,
             'category' => $this->category,
             'is_active' => $this->is_active,
+            // Only set when the caller eager-loaded it via withCount() scoped
+            // to one specific part (see
+            // PublicBreakdownController::equipmentForPartInBranch()) — absent
+            // for every other, part-agnostic use of this resource.
+            'active_installation_count' => $this->when(
+                isset($this->active_installation_count),
+                fn () => (int) $this->active_installation_count
+            ),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

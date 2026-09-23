@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\InvalidReplacementSelectionException;
 use App\Exceptions\PartStockNotFoundException;
 use App\Exceptions\ReplacementRequestAlreadyReviewedException;
 use App\Http\Controllers\Controller;
@@ -27,7 +28,7 @@ class PartReplacementRequestController extends Controller
                 'equipment.machine.line',
                 fn ($q) => $q->where('branch_id', $branch->id)
             )
-            ->with(['part', 'equipment.machine.line.branch', 'reviewedBy']);
+            ->with(['part', 'equipment.machine.line.branch', 'reviewedBy', 'items.oldInstallation', 'items.newInstallation']);
 
         if ($status = $request->string('status')->toString()) {
             $query->where('status', $status);
@@ -43,16 +44,18 @@ class PartReplacementRequestController extends Controller
                 $partReplacementRequest,
                 $request->user(),
                 $request->validated()['notes'] ?? null,
-                $request->validated()['old_installation_id'] ?? null,
+                $request->validated()['old_installation_ids'] ?? [],
             );
-        } catch (PartStockNotFoundException|InsufficientStockException|AmbiguousInstallationException $e) {
+        } catch (PartStockNotFoundException|InsufficientStockException|AmbiguousInstallationException|InvalidReplacementSelectionException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (ReplacementRequestAlreadyReviewedException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
         return new PartReplacementRequestResource(
-            $partReplacementRequest->refresh()->load(['part', 'equipment.machine.line.branch', 'reviewedBy'])
+            $partReplacementRequest->refresh()->load([
+                'part', 'equipment.machine.line.branch', 'reviewedBy', 'items.oldInstallation', 'items.newInstallation',
+            ])
         );
     }
 
