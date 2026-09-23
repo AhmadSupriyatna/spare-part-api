@@ -11,6 +11,7 @@ use App\Models\Equipment;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartInstallation;
+use App\Models\PartRepair;
 use App\Models\PartReplacementRequest;
 use App\Models\PartReplacementRequestItem;
 use App\Models\PartStock;
@@ -214,5 +215,106 @@ class BreakdownMultiUnitReplacementTest extends TestCase
 
         $this->expectException(InvalidReplacementSelectionException::class);
         app(PartReplacementService::class)->approve($request, $this->user, null, [$a->id, $b->id, $foreignInstallation->id]);
+    }
+
+    /**
+     * Finding: for quantity_used = 1, an explicit old_installation_id used
+     * to be trusted at face value (PartInstallation::whereKey($id)->first(),
+     * no ownership check at all) — closed so the same
+     * equipment/part/active rules apply here as they already did for the
+     * quantity > 1 path.
+     */
+
+    /** 1. qty=1 + valid installation -> PASS (already covered above, restated here for the finding's own numbering). */
+    public function test_finding3_quantity_1_explicit_valid_installation_passes(): void
+    {
+        $unit = $this->installUnit();
+        $request = $this->makeRequest(1);
+
+        app(PartReplacementService::class)->approve($request, $this->user, null, [$unit->id]);
+
+        $this->assertNotNull($unit->fresh()->removed_at);
+        $this->assertSame(ReplacementRequestStatus::Approved, $request->fresh()->status);
+    }
+
+    /** 2. qty=1 + installation belongs to a different equipment -> REJECT, nothing changes. */
+    public function test_finding3_quantity_1_explicit_installation_from_different_equipment_is_rejected(): void
+    {
+        $this->installUnit();
+
+        $otherLine = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'runtime_hours' => 100]);
+        $otherMachine = Machine::factory()->create(['line_id' => $otherLine->id]);
+        $otherEquipment = Equipment::factory()->create(['machine_id' => $otherMachine->id]);
+        $foreignInstallation = $this->installUnit($otherEquipment, $this->part);
+
+        $request = $this->makeRequest(1);
+
+        try {
+            app(PartReplacementService::class)->approve($request, $this->user, null, [$foreignInstallation->id]);
+            $this->fail('Expected InvalidReplacementSelectionException was not thrown.');
+        } catch (InvalidReplacementSelectionException) {
+            // expected
+        }
+
+        $this->assertSame(ReplacementRequestStatus::Pending, $request->fresh()->status);
+        $this->assertNull($foreignInstallation->fresh()->removed_at);
+        $this->assertSame(0, PartReplacementRequestItem::where('replacement_request_id', $request->id)->count());
+        $this->assertSame(0, StockLedger::count());
+        $this->assertSame(0, PartRepair::count());
+    }
+
+    /** 3. qty=1 + installation belongs to a different part -> REJECT, nothing changes. */
+    public function test_finding3_quantity_1_explicit_installation_from_different_part_is_rejected(): void
+    {
+        $this->installUnit();
+
+        $otherPart = Part::factory()->create();
+        $otherPartInstallation = $this->installUnit($this->equipment, $otherPart);
+
+        $request = $this->makeRequest(1);
+
+        try {
+            app(PartReplacementService::class)->approve($request, $this->user, null, [$otherPartInstallation->id]);
+            $this->fail('Expected InvalidReplacementSelectionException was not thrown.');
+        } catch (InvalidReplacementSelectionException) {
+            // expected
+        }
+
+        $this->assertSame(ReplacementRequestStatus::Pending, $request->fresh()->status);
+        $this->assertNull($otherPartInstallation->fresh()->removed_at);
+        $this->assertSame(0, PartReplacementRequestItem::where('replacement_request_id', $request->id)->count());
+    }
+
+    /** 4. qty=1 + installation already removed -> REJECT, nothing changes. */
+    public function test_finding3_quantity_1_explicit_installation_already_removed_is_rejected(): void
+    {
+        $unit = $this->installUnit();
+        app(PartLifecycleService::class)->remove($unit);
+        $repairCountBefore = PartRepair::count();
+
+        $request = $this->makeRequest(1);
+
+        try {
+            app(PartReplacementService::class)->approve($request, $this->user, null, [$unit->id]);
+            $this->fail('Expected InvalidReplacementSelectionException was not thrown.');
+        } catch (InvalidReplacementSelectionException) {
+            // expected
+        }
+
+        $this->assertSame(ReplacementRequestStatus::Pending, $request->fresh()->status);
+        $this->assertSame(0, PartReplacementRequestItem::where('replacement_request_id', $request->id)->count());
+        $this->assertSame($repairCountBefore, PartRepair::count());
+        $this->assertSame(0, StockLedger::count());
+    }
+
+    /** 5. Existing ambiguous qty=1 behaviour (no explicit pick, >1 active) is unchanged -> AmbiguousInstallationException. */
+    public function test_finding3_quantity_1_ambiguous_without_pick_still_throws(): void
+    {
+        $this->installUnit();
+        $this->installUnit();
+        $request = $this->makeRequest(1);
+
+        $this->expectException(AmbiguousInstallationException::class);
+        app(PartReplacementService::class)->approve($request, $this->user);
     }
 }

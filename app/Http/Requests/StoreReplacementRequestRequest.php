@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Equipment;
 use App\Models\PartInstallation;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -52,18 +53,38 @@ class StoreReplacementRequestRequest extends FormRequest
     }
 
     /**
-     * quantity_used can never exceed how many units of this part are
-     * actually active on this equipment right now — otherwise the request
-     * would sit as "Pending" only to be un-approvable later (see
-     * PartReplacementService::resolveOldInstallations()). Checked here, at
-     * creation time, so an invalid request is never even stored. Skipped if
-     * part_id/equipment_id themselves already failed validation, so this
-     * doesn't compound a confusing second error on top of the first.
+     * Two things checked here, in order, both re-verified server-side so
+     * neither can be bypassed by a direct API call:
+     *
+     * 1. The equipment must actually belong to the branch encoded in the
+     *    scanned QR's own URL (/breakdown/scan/:partId/:branchId), route-bound
+     *    here as {branch} — never trusted as mere frontend information.
+     * 2. quantity_used can never exceed how many units of this part are
+     *    actually active on this equipment right now — otherwise the request
+     *    would sit as "Pending" only to be un-approvable later (see
+     *    PartReplacementService::resolveOldInstallations()).
+     *
+     * Both are skipped if part_id/equipment_id/quantity_used themselves
+     * already failed basic validation, so this doesn't compound a confusing
+     * second error on top of the first.
      */
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
             if ($validator->errors()->hasAny(['part_id', 'equipment_id', 'quantity_used'])) {
+                return;
+            }
+
+            $branch = $this->route('branch');
+            $equipment = Equipment::with('machine.line')->find($this->input('equipment_id'));
+            $equipmentBranchId = $equipment?->machine?->line?->branch_id;
+
+            if (! $branch || $equipmentBranchId !== $branch->id) {
+                $validator->errors()->add(
+                    'equipment_id',
+                    'Equipment ini berada di plant lain — tidak sesuai dengan QR yang dipindai.'
+                );
+
                 return;
             }
 

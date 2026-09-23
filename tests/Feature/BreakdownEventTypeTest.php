@@ -25,6 +25,8 @@ class BreakdownEventTypeTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Branch $branch;
+
     private Equipment $equipment;
 
     private User $user;
@@ -33,7 +35,7 @@ class BreakdownEventTypeTest extends TestCase
     {
         parent::setUp();
 
-        $branch = Branch::factory()->create();
+        $this->branch = $branch = Branch::factory()->create();
         $line = ProductionLine::factory()->create(['branch_id' => $branch->id, 'runtime_hours' => 500]);
         $machine = Machine::factory()->create(['line_id' => $line->id]);
         $this->equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
@@ -63,7 +65,7 @@ class BreakdownEventTypeTest extends TestCase
         $part = Part::factory()->create(['replacement_strategy' => $strategy]);
         app(PartLifecycleService::class)->install($this->equipment, ['part_id' => $part->id], $this->user);
 
-        $response = $this->postJson('/api/public/replacement-requests', [
+        $response = $this->postJson("/api/public/branches/{$this->branch->id}/replacement-requests", [
             'part_id' => $part->id,
             'equipment_id' => $this->equipment->id,
             'requested_by_name' => 'Teknisi UAT',
@@ -80,7 +82,7 @@ class BreakdownEventTypeTest extends TestCase
         $part = Part::factory()->create(['replacement_strategy' => PartReplacementStrategy::FailureBased]);
         app(PartLifecycleService::class)->install($this->equipment, ['part_id' => $part->id], $this->user);
 
-        $this->postJson('/api/public/replacement-requests', [
+        $this->postJson("/api/public/branches/{$this->branch->id}/replacement-requests", [
             'part_id' => $part->id,
             'equipment_id' => $this->equipment->id,
             'requested_by_name' => 'Teknisi UAT',
@@ -97,14 +99,14 @@ class BreakdownEventTypeTest extends TestCase
         app(PartLifecycleService::class)->install($this->equipment, ['part_id' => $part->id], $this->user);
         app(PartLifecycleService::class)->install($this->equipment, ['part_id' => $part->id], $this->user);
 
-        $this->postJson('/api/public/replacement-requests', [
+        $this->postJson("/api/public/branches/{$this->branch->id}/replacement-requests", [
             'part_id' => $part->id,
             'equipment_id' => $this->equipment->id,
             'requested_by_name' => 'Teknisi UAT',
             'quantity_used' => 3,
         ])->assertUnprocessable()->assertJsonValidationErrors('quantity_used');
 
-        $this->postJson('/api/public/replacement-requests', [
+        $this->postJson("/api/public/branches/{$this->branch->id}/replacement-requests", [
             'part_id' => $part->id,
             'equipment_id' => $this->equipment->id,
             'requested_by_name' => 'Teknisi UAT',
@@ -118,7 +120,7 @@ class BreakdownEventTypeTest extends TestCase
         $part = Part::factory()->create(['replacement_strategy' => PartReplacementStrategy::FailureBased]);
         app(PartLifecycleService::class)->install($this->equipment, ['part_id' => $part->id], $this->user);
 
-        $response = $this->postJson('/api/public/replacement-requests', [
+        $response = $this->postJson("/api/public/branches/{$this->branch->id}/replacement-requests", [
             'part_id' => $part->id,
             'equipment_id' => $this->equipment->id,
             'requested_by_name' => 'Teknisi UAT',
@@ -135,7 +137,7 @@ class BreakdownEventTypeTest extends TestCase
         $part = Part::factory()->create(['replacement_strategy' => PartReplacementStrategy::LifeBased]);
         app(PartLifecycleService::class)->install($this->equipment, ['part_id' => $part->id], $this->user);
 
-        $response = $this->postJson('/api/public/replacement-requests', [
+        $response = $this->postJson("/api/public/branches/{$this->branch->id}/replacement-requests", [
             'part_id' => $part->id,
             'equipment_id' => $this->equipment->id,
             'requested_by_name' => 'Teknisi UAT',

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ReplacementRequestEventType;
 use App\Enums\ReplacementRequestStatus;
 use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\InvalidReplacementSelectionException;
@@ -78,6 +79,7 @@ class PartReplacementService
 
             $oldInstallations = $this->resolveOldInstallations($locked, $equipment, $oldInstallationIds);
 
+            $eventLabel = $locked->event_type === ReplacementRequestEventType::Failure ? 'Failure' : 'Breakdown';
             $pairs = [];
 
             foreach ($oldInstallations as $oldInstallation) {
@@ -91,7 +93,7 @@ class PartReplacementService
                 $newInstallation = $this->lifecycle->install($equipment, [
                     'part_id' => $locked->part_id,
                     'replacing_installation_id' => $oldInstallation?->id,
-                    'notes' => "Breakdown: diajukan oleh {$locked->requested_by_name}".
+                    'notes' => "{$eventLabel}: diajukan oleh {$locked->requested_by_name}".
                         ($locked->reason ? " — {$locked->reason}" : ''),
                 ], $reviewer);
 
@@ -140,12 +142,34 @@ class PartReplacementService
                 throw new InvalidReplacementSelectionException('Jumlah unit yang dipilih harus tepat 1.');
             }
 
-            // Preserves the exact legacy behaviour: an explicit pick wins,
-            // otherwise auto-resolve (throws AmbiguousInstallationException if
-            // more than one is active), and it's fine for there to be no old
+            if (! empty($oldInstallationIds)) {
+                // An explicit pick must actually be an active installation of
+                // this part on this equipment — never trust the ID alone, the
+                // same ownership check the quantity > 1 path already does
+                // below, and the same lock so a concurrent approval touching
+                // this exact installation can't race past it.
+                $old = PartInstallation::whereKey($oldInstallationIds[0])
+                    ->where('equipment_id', $equipment->id)
+                    ->where('part_id', $request->part_id)
+                    ->whereNull('removed_at')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $old) {
+                    throw new InvalidReplacementSelectionException(
+                        'Unit yang dipilih tidak valid — bukan milik equipment/part ini, atau sudah tidak aktif.'
+                    );
+                }
+
+                return collect([$old]);
+            }
+
+            // No explicit pick: preserve the exact legacy behaviour —
+            // auto-resolve (throws AmbiguousInstallationException if more
+            // than one is active), and it's fine for there to be no old
             // installation to close out at all — a new one still gets
             // installed either way.
-            $old = $this->lifecycle->resolveActiveInstallation($equipment, $request->part_id, $oldInstallationIds[0] ?? null);
+            $old = $this->lifecycle->resolveActiveInstallation($equipment, $request->part_id, null);
 
             return collect([$old]);
         }

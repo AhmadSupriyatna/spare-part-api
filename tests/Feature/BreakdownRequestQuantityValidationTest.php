@@ -27,6 +27,8 @@ class BreakdownRequestQuantityValidationTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Branch $branch;
+
     private Equipment $equipment;
 
     private Part $part;
@@ -37,7 +39,7 @@ class BreakdownRequestQuantityValidationTest extends TestCase
     {
         parent::setUp();
 
-        $branch = Branch::factory()->create();
+        $this->branch = $branch = Branch::factory()->create();
         $line = ProductionLine::factory()->create(['branch_id' => $branch->id, 'runtime_hours' => 500]);
         $machine = Machine::factory()->create(['line_id' => $line->id]);
         $this->equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
@@ -56,7 +58,7 @@ class BreakdownRequestQuantityValidationTest extends TestCase
 
     private function submit(int $quantityUsed): TestResponse
     {
-        return $this->postJson('/api/public/replacement-requests', [
+        return $this->postJson("/api/public/branches/{$this->branch->id}/replacement-requests", [
             'part_id' => $this->part->id,
             'equipment_id' => $this->equipment->id,
             'requested_by_name' => 'Teknisi UAT',

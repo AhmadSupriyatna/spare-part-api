@@ -89,6 +89,15 @@ class PublicBreakdownController extends Controller
     }
 
     /**
+     * $branch is the plant encoded in the printed QR's own URL
+     * (/breakdown/scan/:partId/:branchId) — route-bound the same way
+     * equipmentForPartInBranch() above is, so it's never just information
+     * the frontend happens to send. StoreReplacementRequestRequest
+     * cross-checks that the submitted equipment_id actually lives in this
+     * exact branch (see its withValidator()), so a direct API call can't
+     * submit an equipment from a different plant than the QR that was
+     * scanned.
+     *
      * event_type is decided here, server-side, from the part's own
      * replacement_strategy as it stands right now in the database — never
      * from anything the client sends (StoreReplacementRequestRequest
@@ -97,7 +106,7 @@ class PublicBreakdownController extends Controller
      * either way; this only tags which kind of event it turned out to be,
      * for Phase 2 (Failure Management vs Breakdown Management) to branch on.
      */
-    public function store(StoreReplacementRequestRequest $request): JsonResponse
+    public function store(StoreReplacementRequestRequest $request, Branch $branch): JsonResponse
     {
         $data = $request->validated();
         $part = Part::findOrFail($data['part_id']);

@@ -46,7 +46,7 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
     Route::get('/lines/{line}/machines', [PublicBreakdownController::class, 'machines']);
     Route::get('/machines/{machine}/equipment', [PublicBreakdownController::class, 'equipment']);
     Route::get('/parts/{part}/branches/{branch}/equipment', [PublicBreakdownController::class, 'equipmentForPartInBranch']);
-    Route::post('/replacement-requests', [PublicBreakdownController::class, 'store']);
+    Route::post('/branches/{branch}/replacement-requests', [PublicBreakdownController::class, 'store']);
 
     // QR-per-unit flow: scanning the tag on a specific physical part unit —
     // reuses the branches/equipment-for-part lookups above for the reinstall
