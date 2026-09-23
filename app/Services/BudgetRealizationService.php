@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\PartReplacementStrategy;
 use App\Models\Branch;
 use App\Models\PartReplacementRequest;
 use App\Models\StockLedger;
@@ -11,12 +12,12 @@ use Illuminate\Support\Carbon;
 class BudgetRealizationService
 {
     /**
-     * Actual spend for one category/branch/year, from stock_ledger's
-     * unit_cost snapshot (see the 2026-09-18 migration) — never re-derived
-     * from part_stocks.unit_cost, which keeps moving. Only TYPE_ISSUE rows
-     * count as "spend": a part leaving stock via a WO or breakdown is the
-     * actual maintenance cost event; receiving/adjustment/etc. are
-     * procurement or correction, not maintenance spend.
+     * Actual spend for one replacement-strategy/branch/year, from
+     * stock_ledger's unit_cost snapshot (see the 2026-09-18 migration) —
+     * never re-derived from part_stocks.unit_cost, which keeps moving. Only
+     * TYPE_ISSUE rows count as "spend": a part leaving stock via a WO or
+     * breakdown is the actual maintenance cost event; receiving/adjustment/
+     * etc. are procurement or correction, not maintenance spend.
      *
      * Split into planned (reference is a Task, i.e. a PM/WO checklist) vs
      * unplanned (reference is a PartReplacementRequest, i.e. breakdown) —
@@ -25,7 +26,7 @@ class BudgetRealizationService
      *
      * @return array{planned: string, unplanned: string, total: string, unpriced_transactions: int}
      */
-    public function calculateRealization(Branch $branch, string $category, int $year): array
+    public function calculateRealization(Branch $branch, PartReplacementStrategy $strategy, int $year): array
     {
         $start = Carbon::create($year, 1, 1)->startOfYear();
         $end = Carbon::create($year, 1, 1)->endOfYear();
@@ -33,15 +34,9 @@ class BudgetRealizationService
         $query = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
             ->whereBetween('occurred_at', [$start, $end])
-            ->whereHas('partStock', function ($q) use ($branch, $category) {
+            ->whereHas('partStock', function ($q) use ($branch, $strategy) {
                 $q->where('branch_id', $branch->id);
-                $q->whereHas('part', function ($q2) use ($category) {
-                    if ($category === '') {
-                        $q2->where(fn ($q3) => $q3->whereNull('category')->orWhere('category', ''));
-                    } else {
-                        $q2->where('category', $category);
-                    }
-                });
+                $q->whereHas('part', fn ($q2) => $q2->where('replacement_strategy', $strategy));
             });
 
         $planned = '0.00';

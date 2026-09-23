@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Part;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\Part
+ * @mixin Part
  */
 class PartResource extends JsonResource
 {
@@ -21,9 +22,9 @@ class PartResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
             'unit' => $this->unit,
-            'category' => $this->category,
             'price' => $this->price,
             'estimated_lifetime_hours' => $this->estimated_lifetime_hours,
+            'replacement_strategy' => $this->replacement_strategy->value,
             'image_url' => $this->imageUrl(),
             'is_active' => $this->is_active,
             'stocks' => PartStockResource::collection($this->whenLoaded('stocks')),

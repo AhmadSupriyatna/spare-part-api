@@ -33,7 +33,7 @@ class StockLedgerReportResource extends JsonResource
             'part_id' => $this->partStock->part_id,
             'part_name' => $this->partStock->part->name,
             'item_master_no' => $this->partStock->part->item_master_no,
-            'category' => $this->partStock->part->category,
+            'replacement_strategy' => $this->partStock->part->replacement_strategy->value,
             'type' => $this->type,
             'channel' => $this->channelLabel(),
             'quantity_change' => $this->quantity_change,

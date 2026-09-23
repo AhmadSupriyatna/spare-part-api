@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PartReplacementStrategy;
 use App\Enums\PartUnitStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -79,11 +80,17 @@ class PartUnit extends Model
 
     /**
      * How much of this part's estimated lifetime has been used up, as a
-     * percentage — null if the part has no estimated_lifetime_hours set, so
-     * there's nothing to compare against.
+     * percentage — null if the part has no estimated_lifetime_hours set, or
+     * if the part's replacement strategy isn't LifeBased (lifetime hours may
+     * still be stored for history, but must not drive automatic scheduling
+     * for any other strategy), so there's nothing to compare against.
      */
     public function percentUsed(): ?int
     {
+        if ($this->part->replacement_strategy !== PartReplacementStrategy::LifeBased) {
+            return null;
+        }
+
         $estimatedHours = $this->part->estimated_lifetime_hours;
 
         if (! $estimatedHours) {
@@ -95,11 +102,16 @@ class PartUnit extends Model
 
     /**
      * Hours of estimated lifetime left before this unit is fully worn —
-     * null under the same condition as percentUsed() (no estimate to
-     * compare against). Feeds the PM auto-schedule due-date calculation.
+     * null under the same conditions as percentUsed() (no estimate to
+     * compare against, or the strategy isn't LifeBased). Feeds the PM
+     * auto-schedule due-date calculation.
      */
     public function remainingHours(): ?int
     {
+        if ($this->part->replacement_strategy !== PartReplacementStrategy::LifeBased) {
+            return null;
+        }
+
         $estimatedHours = $this->part->estimated_lifetime_hours;
 
         if (! $estimatedHours) {

@@ -21,7 +21,7 @@ class PartStockResource extends JsonResource
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
-            'category' => $this->whenLoaded('part', fn () => $this->part?->category),
+            'replacement_strategy' => $this->whenLoaded('part', fn () => $this->part?->replacement_strategy->value),
             'branch_id' => $this->branch_id,
             'branch_name' => $this->whenLoaded('branch', fn () => $this->branch->name),
             'supplier_id' => $this->supplier_id,

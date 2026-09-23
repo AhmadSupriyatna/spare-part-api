@@ -50,7 +50,6 @@ class PartFactory extends Factory
             'name' => $item['name'],
             'description' => null,
             'unit' => $item['unit'],
-            'category' => $item['category'],
             'price' => $this->faker->randomFloat(2, 10000, 750000),
             'is_active' => true,
         ];

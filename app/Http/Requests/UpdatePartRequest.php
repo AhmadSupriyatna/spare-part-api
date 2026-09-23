@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\PartReplacementStrategy;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -26,9 +27,9 @@ class UpdatePartRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'unit' => ['sometimes', 'required', 'string', 'max:50', 'exists:units,name'],
-            'category' => ['nullable', 'string', 'max:100'],
             'price' => ['sometimes', 'numeric', 'min:0'],
             'estimated_lifetime_hours' => ['nullable', 'integer', 'min:1'],
+            'replacement_strategy' => ['sometimes', 'required', Rule::enum(PartReplacementStrategy::class)],
             'image' => ['nullable', 'image', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
         ];

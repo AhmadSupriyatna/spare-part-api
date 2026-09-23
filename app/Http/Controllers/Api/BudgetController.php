@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\PartReplacementStrategy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBudgetRequest;
 use App\Http\Requests\UpdateBudgetRequest;
@@ -25,7 +26,7 @@ class BudgetController extends Controller
 
     public function index(Request $request, Branch $branch): AnonymousResourceCollection
     {
-        $query = $branch->budgets()->with(['creator', 'items.part'])->orderByDesc('year')->orderBy('category');
+        $query = $branch->budgets()->with(['creator', 'items.part'])->orderByDesc('year')->orderBy('replacement_strategy');
 
         if ($request->filled('year')) {
             $query->where('year', $request->integer('year'));
@@ -34,7 +35,7 @@ class BudgetController extends Controller
         $budgets = $query->get()->each(function (Budget $budget) use ($branch) {
             $budget->setAttribute(
                 'realization',
-                $this->realization->calculateRealization($branch, $budget->category, $budget->year)
+                $this->realization->calculateRealization($branch, $budget->replacement_strategy, $budget->year)
             );
             $this->attachLineBreakdowns($budget, $branch);
         });
@@ -43,16 +44,22 @@ class BudgetController extends Controller
     }
 
     /**
-     * Parts in this category (branch-wide) that currently have an active
-     * installation, with current unit cost — what the budget input drawer
-     * renders as the per-part input rows, before the user has entered
-     * anything.
+     * Parts under this replacement strategy (branch-wide) that currently
+     * have an active installation, with current unit cost — what the budget
+     * input drawer renders as the per-part input rows, before the user has
+     * entered anything. Only meaningful for LifeBased (the only strategy
+     * with an automatic forecast); the drawer doesn't call this for any
+     * other strategy.
      */
-    public function partsForCategory(Request $request, Branch $branch): JsonResponse
+    public function partsForStrategy(Request $request, Branch $branch): JsonResponse
     {
-        $category = (string) $request->string('category');
+        $strategy = $request->enum('strategy', PartReplacementStrategy::class);
 
-        return response()->json(['data' => $this->forecast->partsForCategory($branch, $category)]);
+        if (! $strategy) {
+            return response()->json(['data' => []]);
+        }
+
+        return response()->json(['data' => $this->forecast->partsForStrategy($branch, $strategy)]);
     }
 
     public function store(StoreBudgetRequest $request, Branch $branch): BudgetResource
@@ -60,10 +67,10 @@ class BudgetController extends Controller
         $data = $request->validated();
 
         $budget = DB::transaction(function () use ($data, $branch, $request) {
-            $priced = $this->forecast->priceItems($branch, $data['items']);
+            $priced = $this->forecast->priceItems($branch, $data['items'] ?? []);
 
             $budget = $branch->budgets()->create([
-                'category' => $data['category'] ?: '',
+                'replacement_strategy' => $data['replacement_strategy'],
                 'year' => $data['year'],
                 'planned_amount' => $priced['planned_amount'],
                 'corrective_amount' => $data['corrective_amount'] ?? 0,

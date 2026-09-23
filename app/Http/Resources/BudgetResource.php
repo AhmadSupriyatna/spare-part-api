@@ -15,8 +15,7 @@ class BudgetResource extends JsonResource
         return [
             'id' => $this->id,
             'branch_id' => $this->branch_id,
-            'category' => $this->category,
-            'category_label' => $this->category === '' ? 'Tanpa Kategori' : $this->category,
+            'replacement_strategy' => $this->replacement_strategy->value,
             'year' => $this->year,
             'planned_amount' => $this->planned_amount,
             'corrective_amount' => $this->corrective_amount,

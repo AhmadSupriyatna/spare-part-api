@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\PartReplacementStrategy;
 use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\Part;
@@ -12,23 +13,17 @@ class BudgetForecastService
     private const WEEKS_PER_YEAR = 52;
 
     /**
-     * Parts in one category (branch-wide) that currently have at least one
-     * active installation — the raw material for the budget input drawer's
-     * per-part rows. `estimated_lifetime_hours` is surfaced too so the
-     * drawer can flag parts that can't be forecast yet (no lifetime data)
-     * before the user even tries.
+     * Parts under one replacement strategy (branch-wide) that currently have
+     * at least one active installation — the raw material for the budget
+     * input drawer's per-part rows. `estimated_lifetime_hours` is surfaced
+     * too so the drawer can flag parts that can't be forecast yet (no
+     * lifetime data) before the user even tries.
      *
      * @return list<array{part_id: int, part_name: string, item_master_no: string, unit_cost: string, estimated_lifetime_hours: int|null, active_installations: int}>
      */
-    public function partsForCategory(Branch $branch, string $category): array
+    public function partsForStrategy(Branch $branch, PartReplacementStrategy $strategy): array
     {
-        $partsQuery = Part::query()->where('is_active', true);
-
-        if ($category === '') {
-            $partsQuery->where(fn ($q) => $q->whereNull('category')->orWhere('category', ''));
-        } else {
-            $partsQuery->where('category', $category);
-        }
+        $partsQuery = Part::query()->where('is_active', true)->where('replacement_strategy', $strategy);
 
         $items = [];
 
@@ -63,18 +58,27 @@ class BudgetForecastService
      * wearing out, which means MORE frequent replacement, not less).
      * "estimasi kenaikan harga" inflates the unit cost for the budget year.
      *
+     * Only a LifeBased part has a lifetime-driven forecast at all — a part
+     * on any other strategy returns zero pcs/year here even if it happens
+     * to still carry old estimated_lifetime_hours data, so that data is
+     * never mistaken for a live forecast input again.
+     *
      * @return array{pcs_per_year: float, unit_cost: string}
      */
     public function ratesFor(Branch $branch, Part $part, float $lifetimePercent, float $priceIncreasePercent): array
     {
+        $unitCost = $this->unitCostFor($branch, $part);
+        $adjustedUnitCost = bcmul($unitCost, (string) (1 + $priceIncreasePercent / 100), 4);
+
+        if ($part->replacement_strategy !== PartReplacementStrategy::LifeBased || ! $part->estimated_lifetime_hours) {
+            return ['pcs_per_year' => 0.0, 'unit_cost' => $adjustedUnitCost];
+        }
+
         $avgWeeklyHours = CompanySetting::current()->avg_weekly_operating_hours ?: 85;
         $hoursPerYear = $avgWeeklyHours * self::WEEKS_PER_YEAR;
 
         $effectiveLifetimeHours = $part->estimated_lifetime_hours * ($lifetimePercent / 100);
         $pcsPerYear = $effectiveLifetimeHours > 0 ? $hoursPerYear / $effectiveLifetimeHours : 0.0;
-
-        $unitCost = $this->unitCostFor($branch, $part);
-        $adjustedUnitCost = bcmul($unitCost, (string) (1 + $priceIncreasePercent / 100), 4);
 
         return ['pcs_per_year' => $pcsPerYear, 'unit_cost' => $adjustedUnitCost];
     }
@@ -118,7 +122,7 @@ class BudgetForecastService
     /**
      * Live per-line split of one priced item's total — "berapa pcs" per
      * Line, not per individual equipment (too granular to show once a
-     * category spans many machines). Computed fresh from current
+     * strategy spans many machines). Computed fresh from current
      * PartInstallation data rather than stored, so it never goes stale as
      * parts get moved/replaced after the budget was saved.
      *

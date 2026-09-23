@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PartReplacementStrategy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,9 +17,9 @@ class Part extends Model
         'name',
         'description',
         'unit',
-        'category',
         'price',
         'estimated_lifetime_hours',
+        'replacement_strategy',
         'image_path',
         'is_active',
     ];
@@ -28,6 +29,7 @@ class Part extends Model
         return [
             'price' => 'decimal:2',
             'estimated_lifetime_hours' => 'integer',
+            'replacement_strategy' => PartReplacementStrategy::class,
             'is_active' => 'boolean',
         ];
     }
