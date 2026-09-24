@@ -8,6 +8,7 @@ use App\Models\Task;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class CompleteTaskRequest extends FormRequest
 {
@@ -63,11 +64,14 @@ class CompleteTaskRequest extends FormRequest
                 'checks.*.finding' => ['sometimes', 'array'],
                 'checks.*.finding.description' => ['required_with:checks.*.finding', 'string', 'max:2000'],
                 'checks.*.finding.result' => ['required_with:checks.*.finding', Rule::enum(FindingResult::class)],
-                'checks.*.finding.severity' => [
-                    'nullable',
-                    Rule::enum(FindingSeverity::class),
-                    'required_unless:checks.*.finding.result,pass',
-                ],
+                // NOT required_unless:...,pass here — that rule treats a
+                // wholly absent `finding` (the normal case; see class docblock
+                // above) the same as a present-but-non-"pass" one, so
+                // omitting `finding` entirely made severity required. The
+                // "required only when finding is actually sent and isn't a
+                // pass" condition instead lives in withValidator() below,
+                // where absence and presence can be told apart.
+                'checks.*.finding.severity' => ['nullable', Rule::enum(FindingSeverity::class)],
                 'checks.*.finding.recommendation' => ['nullable', 'string', 'max:2000'],
             ];
         }
@@ -77,5 +81,19 @@ class CompleteTaskRequest extends FormRequest
             'part_stock_id' => ['nullable', 'integer', 'exists:part_stocks,id'],
             'quantity_used' => ['nullable', 'integer', 'min:1', 'required_with:part_stock_id'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        // sometimes()'s callback receives ($payload, $item) - the whole
+        // request as the first argument, and (since this rule key doesn't
+        // end in ".*") the value one segment up from the rule itself as the
+        // second: here that's `checks.N.finding` (or null when that check
+        // has no `finding` key at all). Only $item is relevant.
+        $validator->sometimes(
+            'checks.*.finding.severity',
+            ['required'],
+            fn ($payload, $finding) => ! is_null($finding) && ($finding['result'] ?? null) !== FindingResult::Pass->value,
+        );
     }
 }

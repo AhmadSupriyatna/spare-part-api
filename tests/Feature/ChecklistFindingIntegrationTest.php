@@ -213,6 +213,67 @@ class ChecklistFindingIntegrationTest extends TestCase
         $this->assertSame(0, Finding::count());
     }
 
+    /**
+     * Regression: the real Workspace payload for a plain checklist
+     * replacement never sends a `finding` key at all (Finding is opt-in
+     * UI). `required_unless:checks.*.finding.result,pass` used to treat a
+     * wholly-absent `finding` the same as a present-but-non-"pass" one,
+     * so severity became required even though no Finding was ever being
+     * submitted — this must complete over HTTP exactly like the
+     * TaskService-level test_completion_without_finding_payload_is_unchanged
+     * above, no 422, no Finding created.
+     */
+    public function test_completion_without_finding_key_succeeds_over_http(): void
+    {
+        PartStock::factory()->create(['part_id' => $this->part->id, 'branch_id' => $this->branch->id, 'quantity_on_hand' => 10]);
+        $oldUnit = app(PartLifecycleService::class)->install($this->equipment, ['part_id' => $this->part->id], $this->user);
+
+        $task = $this->makeTask();
+        $check = $this->makeCheck($task);
+
+        $response = $this->actingAs($this->user)->postJson("/api/tasks/{$task->id}/complete", [
+            'checks' => [[
+                'id' => $check->id,
+                'part_id' => $this->part->id,
+                'is_replaced' => true,
+                'quantity_used' => 1,
+                'old_installation_id' => $oldUnit->id,
+            ]],
+        ]);
+
+        $response->assertOk();
+        $this->assertSame(TaskStatus::Completed, $task->fresh()->status);
+        $this->assertTrue($check->fresh()->is_replaced);
+        $this->assertNotNull($oldUnit->fresh()->removed_at);
+        $this->assertSame(1, PartInstallation::whereNull('removed_at')->count());
+        $this->assertSame(0, Finding::count());
+    }
+
+    /** severity present alongside a non-pass result is accepted (the happy path `required` is guarding). */
+    public function test_severity_accepted_when_result_is_monitor(): void
+    {
+        $task = $this->makeTask();
+        $check = $this->makeCheck($task);
+
+        $response = $this->actingAs($this->user)->postJson("/api/tasks/{$task->id}/complete", [
+            'checks' => [[
+                'id' => $check->id,
+                'part_id' => $this->part->id,
+                'is_replaced' => false,
+                'reason' => 'Perlu dipantau.',
+                'finding' => [
+                    'description' => 'Ada getaran ringan.',
+                    'result' => 'monitor',
+                    'severity' => 'low',
+                ],
+            ]],
+        ]);
+
+        $response->assertOk();
+        $this->assertSame(1, Finding::count());
+        $this->assertSame(FindingSeverity::Low, Finding::first()->severity);
+    }
+
     /** severity is NOT required when result = pass. */
     public function test_severity_not_required_when_result_is_pass(): void
     {
