@@ -21,6 +21,8 @@ class ActivityLogResource extends JsonResource
         'Budget' => 'Budget',
         'Rack' => 'Rak',
         'Location' => 'Bin',
+        'Finding' => 'Temuan (Finding)',
+        'MaintenanceDecision' => 'Keputusan Maintenance',
     ];
 
     private const DISPLAY_FIELDS = ['name', 'code', 'label', 'title', 'slot_label', 'category'];

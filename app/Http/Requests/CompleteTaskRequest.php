@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\FindingResult;
+use App\Enums\FindingSeverity;
 use App\Models\Task;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -51,6 +53,22 @@ class CompleteTaskRequest extends FormRequest
                 ],
                 'checks.*.part_unit_id' => ['nullable', 'integer', 'exists:part_units,id'],
                 'checks.*.old_installation_id' => ['nullable', 'integer', 'exists:part_installations,id'],
+
+                // Optional structured observation, independent of
+                // is_replaced — never required, and never carries
+                // source_type/source_id/equipment_id/part_id/reported_by/
+                // reported_at: those are always server-derived from the
+                // authoritative TaskPartCheck row (see
+                // MaintenanceFindingService::createFromTaskPartCheck()).
+                'checks.*.finding' => ['sometimes', 'array'],
+                'checks.*.finding.description' => ['required_with:checks.*.finding', 'string', 'max:2000'],
+                'checks.*.finding.result' => ['required_with:checks.*.finding', Rule::enum(FindingResult::class)],
+                'checks.*.finding.severity' => [
+                    'nullable',
+                    Rule::enum(FindingSeverity::class),
+                    'required_unless:checks.*.finding.result,pass',
+                ],
+                'checks.*.finding.recommendation' => ['nullable', 'string', 'max:2000'],
             ];
         }
 

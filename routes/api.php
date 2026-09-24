@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\LineController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MachineController;
+use App\Http\Controllers\Api\MaintenanceDecisionController;
+use App\Http\Controllers\Api\MaintenanceHistoryController;
 use App\Http\Controllers\Api\PartController;
 use App\Http\Controllers\Api\PartInstallationController;
 use App\Http\Controllers\Api\PartRepairController;
@@ -129,6 +131,11 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::get('/parts/{part}/units', [PartUnitController::class, 'index']);
     Route::get('/part-units/{partUnit}', [PartUnitController::class, 'show']);
     Route::get('/part-repairs', [PartRepairController::class, 'index']);
+
+    // Maintenance History (Phase 2 Step 5): read-only aggregation over
+    // existing sources, any authenticated role can read — same "View
+    // Finding" level as the rest of the Finding/Decision data it surfaces.
+    Route::get('/branches/{branch}/maintenance-history', [MaintenanceHistoryController::class, 'index']);
 
     // Any authenticated role can work their own tasks and log line runtime.
     Route::post('/tasks/{task}/start', [TaskController::class, 'start']);
@@ -253,6 +260,11 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
 
         Route::post('/part-unit-action-requests/{partUnitActionRequest}/approve', [PartUnitActionRequestController::class, 'approve']);
         Route::post('/part-unit-action-requests/{partUnitActionRequest}/reject', [PartUnitActionRequestController::class, 'reject']);
+
+        // Deciding a Finding (Phase 2 Step 4) is the same authority level as
+        // approving a replacement — Supervisor/Superadmin only, matching the
+        // locked role matrix.
+        Route::post('/findings/{finding}/decision', [MaintenanceDecisionController::class, 'store']);
     });
 
     // Managing other people's accounts (role, branches, password, active

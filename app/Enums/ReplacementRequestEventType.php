@@ -18,8 +18,30 @@ enum ReplacementRequestEventType: string
     case Failure = 'failure';
     case Breakdown = 'breakdown';
 
+    /**
+     * A replacement that traces back to a Finding -> MaintenanceDecision
+     * (REPLACE_PART) — planned/reviewed, never an operational breakdown. Only
+     * ever set by MaintenanceDecisionService, never by the QR flow.
+     */
+    case Maintenance = 'maintenance';
+
     public static function fromReplacementStrategy(PartReplacementStrategy $strategy): self
     {
         return $strategy === PartReplacementStrategy::FailureBased ? self::Failure : self::Breakdown;
+    }
+
+    /**
+     * Feeds installation/stock-ledger notes and the Approval "Asal" badge —
+     * kept as an explicit match rather than a two-way ternary, since a
+     * Failure-or-else fallback would silently mislabel Maintenance as
+     * Breakdown.
+     */
+    public function label(): string
+    {
+        return match ($this) {
+            self::Failure => 'Failure',
+            self::Breakdown => 'Breakdown',
+            self::Maintenance => 'Maintenance',
+        };
     }
 }

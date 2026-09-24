@@ -8,6 +8,7 @@ use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\ChecklistPartMismatchException;
 use App\Exceptions\PartStockBranchMismatchException;
 use App\Exceptions\PartStockNotFoundException;
+use App\Exceptions\TaskAlreadyCompletedException;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
@@ -21,6 +22,7 @@ class TaskService
     public function __construct(
         private readonly StockMovementService $stockMovements,
         private readonly PartLifecycleService $lifecycle,
+        private readonly MaintenanceFindingService $findings,
     ) {}
 
     public function start(Task $task): Task
@@ -44,11 +46,16 @@ class TaskService
      *
      * $checks is used instead, exclusively, when the task came from a Task
      * Library: one entry per planned part — `{part_id, is_replaced,
-     * quantity_used?, reason?, part_unit_id?, old_installation_id?}` — see
-     * completeChecklist().
+     * quantity_used?, reason?, part_unit_id?, old_installation_id?, finding?}`
+     * — see completeChecklist(). `finding` is entirely optional and
+     * independent of is_replaced (see completeChecklist()'s own docblock).
      *
-     * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int}>|null  $checks
+     * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int, finding?: ?array{description: string, result: string, severity?: ?string, recommendation?: ?string}}>|null  $checks
      *
+     * @throws TaskAlreadyCompletedException if the task is already Completed —
+     *                                       checked first, before any stock/lifecycle mutation, so a second
+     *                                       completion attempt (e.g. a double-submit or a stale retry) can never
+     *                                       repeat the replacement.
      * @throws PartStockNotFoundException if a checklist part is marked replaced
      *                                    with a brand-new unit but has no stock record in the equipment's branch.
      * @throws AmbiguousInstallationException if the equipment has more than one
@@ -63,26 +70,39 @@ class TaskService
         ?array $checks = null,
     ): Task {
         return DB::transaction(function () use ($task, $user, $notes, $partStockId, $quantityUsed, $checks) {
+            // Locked so a concurrent completion request for the same task
+            // can't both read "not yet Completed" before either commits —
+            // the second request blocks on this row until the first
+            // transaction finishes, then re-reads the now-Completed status
+            // and is rejected below, the same pattern already used by
+            // PartReplacementService::approve() for the same class of
+            // problem (a request being reviewed twice at once).
+            $locked = Task::whereKey($task->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status === TaskStatus::Completed) {
+                throw new TaskAlreadyCompletedException($locked->id);
+            }
+
             // A checklist (task_part_checks rows) is what actually marks a
             // task as "PM flow" now — it's created whether the task came
             // from a Task Library recipe or a lifetime-worn-part flag, so
             // checking for it (not task_library_id specifically) covers both.
-            if ($task->partChecks()->exists()) {
-                $this->completeChecklist($task, $user, $checks ?? []);
+            if ($locked->partChecks()->exists()) {
+                $this->completeChecklist($locked, $user, $checks ?? []);
             } else {
                 if ($partStockId) {
-                    $task->update([
+                    $locked->update([
                         'part_stock_id' => $partStockId,
                         'quantity_used' => $quantityUsed,
                     ]);
                     // Force the relation to re-resolve against the new foreign key
                     // instead of serving whatever was cached on it before.
-                    $task->unsetRelation('partStock');
+                    $locked->unsetRelation('partStock');
                 }
 
-                if ($task->part_stock_id && $task->quantity_used) {
-                    $partStock = $task->partStock;
-                    $branchId = $task->equipment->machine->line->branch_id;
+                if ($locked->part_stock_id && $locked->quantity_used) {
+                    $partStock = $locked->partStock;
+                    $branchId = $locked->equipment->machine->line->branch_id;
 
                     // Never trust that a submitted (or pre-filled) part_stock_id
                     // actually belongs to this task's own equipment's plant —
@@ -96,33 +116,33 @@ class TaskService
                     $this->stockMovements->record(
                         partStock: $partStock,
                         type: StockLedger::TYPE_ISSUE,
-                        quantityChange: -$task->quantity_used,
+                        quantityChange: -$locked->quantity_used,
                         user: $user,
-                        notes: "Dipakai untuk tugas #{$task->id}: {$task->title}",
-                        reference: $task,
+                        notes: "Dipakai untuk tugas #{$locked->id}: {$locked->title}",
+                        reference: $locked,
                     );
                 }
             }
 
-            $task->update([
+            $locked->update([
                 'status' => TaskStatus::Completed,
                 'completed_at' => now(),
                 'completion_notes' => $notes,
             ]);
 
-            if ($task->work_order_id) {
-                $workOrder = $task->workOrder;
+            if ($locked->work_order_id) {
+                $workOrder = $locked->workOrder;
                 if ($workOrder && $workOrder->is_active && $workOrder->schedule_type !== ScheduleType::Unscheduled) {
-                    $this->generateNextTask($workOrder, $task);
+                    $this->generateNextTask($workOrder, $locked);
                 }
             }
 
-            return $task;
+            return $locked;
         });
     }
 
     /**
-     * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int}>  $checks
+     * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int, finding?: ?array{description: string, result: string, severity?: ?string, recommendation?: ?string}}>  $checks
      */
     private function completeChecklist(Task $task, ?User $user, array $checks): void
     {
@@ -194,6 +214,7 @@ class TaskService
             $quantityUsedForPart = $isReplaced ? ($check['quantity_used'] ?? $partCheck->quantity_planned) : null;
             $reason = $isReplaced ? null : ($check['reason'] ?? null);
             $installation = null;
+            $oldInstallation = null;
 
             if ($isReplaced) {
                 // One scan = one PartUnit/PartInstallation, even if
@@ -239,7 +260,19 @@ class TaskService
                 'quantity_used' => $quantityUsedForPart,
                 'reason' => $reason,
                 'part_installation_id' => $installation?->id,
+                'old_installation_id' => $oldInstallation?->id,
             ]);
+
+            // Entirely optional and independent of is_replaced — a Finding
+            // can document *why* a part was left alone just as validly as
+            // it can document what was observed before a replacement. Never
+            // required, never blocks completion: this only runs the same
+            // create-a-row-and-move-on path, inside the transaction already
+            // wrapping this whole method, so a failure here rolls back the
+            // checklist update (and any stock/install/remove) alongside it.
+            if (! empty($check['finding'])) {
+                $this->findings->createFromTaskPartCheck($partCheck, $task->equipment_id, $check['finding'], $user);
+            }
         }
     }
 

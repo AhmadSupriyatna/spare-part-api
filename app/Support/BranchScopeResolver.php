@@ -5,8 +5,10 @@ namespace App\Support;
 use App\Models\Branch;
 use App\Models\Budget;
 use App\Models\Equipment;
+use App\Models\Finding;
 use App\Models\Location;
 use App\Models\Machine;
+use App\Models\MaintenanceDecision;
 use App\Models\PartInstallation;
 use App\Models\PartRepair;
 use App\Models\PartReplacementRequest;
@@ -40,6 +42,12 @@ class BranchScopeResolver
             $model instanceof PartUnitActionRequest => $model->branch_id,
             $model instanceof Machine => $model->line->branch_id,
             $model instanceof Equipment => $model->machine->line->branch_id,
+            $model instanceof Finding => $model->equipment->machine->line->branch_id,
+            // Step 7: without this, ActivityLogController::index()'s
+            // branch-filter (this same resolver) would silently drop every
+            // MaintenanceDecision activity row — decisions never resolve to
+            // a branch on their own, only via their Finding's equipment.
+            $model instanceof MaintenanceDecision => $model->finding->equipment->machine->line->branch_id,
             $model instanceof WorkOrder, $model instanceof Task, $model instanceof TaskLibrary, $model instanceof PartInstallation, $model instanceof PartReplacementRequest => $model->equipment->machine->line->branch_id,
             $model instanceof TaskLibraryPart => $model->taskLibrary->equipment->machine->line->branch_id,
             $model instanceof PartSupplier => $model->supplier->branch_id,

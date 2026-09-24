@@ -8,6 +8,7 @@ use App\Exceptions\InvalidOldInstallationException;
 use App\Exceptions\PartStockBranchMismatchException;
 use App\Exceptions\PartStockNotFoundException;
 use App\Exceptions\PartUnitAlreadyInstalledException;
+use App\Exceptions\TaskAlreadyCompletedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelTaskRequest;
 use App\Http\Requests\CompleteTaskRequest;
@@ -229,6 +230,8 @@ class TaskController extends Controller
             PartStockBranchMismatchException $e
         ) {
             return response()->json(['message' => $e->getMessage()], 422);
+        } catch (TaskAlreadyCompletedException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         }
 
         return new TaskResource($updated->load(['partStock.part', 'partChecks.part']));

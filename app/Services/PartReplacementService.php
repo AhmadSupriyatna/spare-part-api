@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Enums\ReplacementRequestEventType;
 use App\Enums\ReplacementRequestStatus;
 use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\InvalidReplacementSelectionException;
@@ -79,7 +78,7 @@ class PartReplacementService
 
             $oldInstallations = $this->resolveOldInstallations($locked, $equipment, $oldInstallationIds);
 
-            $eventLabel = $locked->event_type === ReplacementRequestEventType::Failure ? 'Failure' : 'Breakdown';
+            $eventLabel = $locked->event_type->label();
             $pairs = [];
 
             foreach ($oldInstallations as $oldInstallation) {

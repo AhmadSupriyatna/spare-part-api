@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\TaskStatus;
 use App\Models\Branch;
+use App\Models\Equipment;
 use App\Models\PartInstallation;
 use App\Models\Task;
 use App\Models\TaskLibrary;
@@ -81,6 +82,44 @@ class PmSchedulingService
                 'part_id' => $installation->part_id,
                 'quantity_planned' => 1,
             ]);
+
+            return $task;
+        });
+    }
+
+    /**
+     * Schedule a one-off Task with no Task Library recipe behind it —
+     * currently only reached from MaintenanceDecisionService's MONITOR/
+     * SCHEDULE_MAINTENANCE ad-hoc follow-up path (see Phase 2 Step 4). One
+     * TaskPartCheck row when a part is given, same quantity_planned=1 shape
+     * as every other single-part checklist row this service creates (see
+     * scheduleFromLifetime()).
+     */
+    public function scheduleAdHoc(
+        Equipment $equipment,
+        string $title,
+        string $dueDate,
+        ?int $partId,
+        ?string $description,
+        ?int $assignedTo,
+    ): Task {
+        return DB::transaction(function () use ($equipment, $title, $dueDate, $partId, $description, $assignedTo) {
+            $task = Task::create([
+                'equipment_id' => $equipment->id,
+                'assigned_to' => $assignedTo,
+                'title' => $title,
+                'description' => $description,
+                'status' => TaskStatus::Pending,
+                'due_date' => $dueDate,
+            ]);
+
+            if ($partId) {
+                TaskPartCheck::create([
+                    'task_id' => $task->id,
+                    'part_id' => $partId,
+                    'quantity_planned' => 1,
+                ]);
+            }
 
             return $task;
         });

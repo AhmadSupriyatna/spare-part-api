@@ -62,7 +62,10 @@ class TaskLibraryController extends Controller
             $library = $equipment->taskLibraries()->create($data);
 
             foreach ($partsData as $partData) {
-                $library->parts()->create(['part_id' => $partData['part_id']]);
+                $library->parts()->create([
+                    'part_id' => $partData['part_id'],
+                    'quantity_required' => $partData['quantity_required'] ?? 1,
+                ]);
             }
 
             return $library;

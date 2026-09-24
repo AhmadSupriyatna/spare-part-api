@@ -39,6 +39,7 @@ class StoreTaskLibraryRequest extends FormRequest
                     fn ($q) => $q->where('equipment_id', $this->route('equipment')?->id)->whereNull('removed_at')
                 ),
             ],
+            'parts.*.quantity_required' => ['sometimes', 'integer', 'min:1'],
         ];
     }
 }
