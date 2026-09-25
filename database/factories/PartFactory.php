@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\PartReplacementStrategy;
 use App\Models\Part;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -52,6 +53,12 @@ class PartFactory extends Factory
             'unit' => $item['unit'],
             'price' => $this->faker->randomFloat(2, 10000, 750000),
             'is_active' => true,
+            // FailureBased is the neutral pick for a factory default: no
+            // lifetime-driven scheduling side effects for tests that don't
+            // care which strategy a Part has. There is no DB-level default
+            // to inherit any more (see PartReplacementStrategy), so this
+            // must be set explicitly.
+            'replacement_strategy' => PartReplacementStrategy::FailureBased->value,
         ];
     }
 }

@@ -13,8 +13,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // 'on_demand' is a hardcoded literal, not
+        // PartReplacementStrategy::OnDemand->value — that case no longer
+        // exists (Phase 3B Step 2), and this migration must stay replayable
+        // via migrate:fresh forever, describing exactly what it did when it
+        // ran, not today's enum. (LifeBased below is untouched — it's still
+        // a valid case.)
         Schema::table('parts', function (Blueprint $table) {
-            $table->string('replacement_strategy')->default(PartReplacementStrategy::OnDemand->value)->after('is_active');
+            $table->string('replacement_strategy')->default('on_demand')->after('is_active');
         });
 
         // Backward-compatible backfill for parts that already existed before

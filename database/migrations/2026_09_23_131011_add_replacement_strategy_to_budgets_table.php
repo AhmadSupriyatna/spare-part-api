@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\PartReplacementStrategy;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -18,8 +17,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Hardcoded literal, not PartReplacementStrategy::OnDemand->value —
+        // that case no longer exists (Phase 3B Step 2), and this migration
+        // must stay replayable via migrate:fresh forever, describing
+        // exactly what it did when it ran, not today's enum.
         Schema::table('budgets', function (Blueprint $table) {
-            $table->string('replacement_strategy')->default(PartReplacementStrategy::OnDemand->value)->after('category');
+            $table->string('replacement_strategy')->default('on_demand')->after('category');
         });
 
         // Backfill existing budgets (if any) from the dominant

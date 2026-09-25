@@ -16,9 +16,12 @@ class StorePartRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        // replacement_strategy is deliberately NOT defaulted here — there is
+        // no safe catch-all strategy (see PartReplacementStrategy), so a new
+        // Part must have one explicitly chosen. The 'required' rule below is
+        // what actually enforces that; this only fills in is_active.
         $this->mergeIfMissing([
             'is_active' => true,
-            'replacement_strategy' => PartReplacementStrategy::OnDemand->value,
         ]);
     }
 

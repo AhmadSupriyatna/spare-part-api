@@ -50,10 +50,7 @@ class BreakdownEventTypeTest extends TestCase
         return [
             'FAILURE_BASED -> FAILURE' => [PartReplacementStrategy::FailureBased, ReplacementRequestEventType::Failure],
             'LIFE_BASED -> BREAKDOWN' => [PartReplacementStrategy::LifeBased, ReplacementRequestEventType::Breakdown],
-            'CONDITION_BASED -> BREAKDOWN' => [PartReplacementStrategy::ConditionBased, ReplacementRequestEventType::Breakdown],
             'SCHEDULED -> BREAKDOWN' => [PartReplacementStrategy::Scheduled, ReplacementRequestEventType::Breakdown],
-            'INSPECTION_BASED -> BREAKDOWN' => [PartReplacementStrategy::InspectionBased, ReplacementRequestEventType::Breakdown],
-            'ON_DEMAND -> BREAKDOWN' => [PartReplacementStrategy::OnDemand, ReplacementRequestEventType::Breakdown],
         ];
     }
 
