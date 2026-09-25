@@ -56,6 +56,11 @@ class Branch extends Model
         return $this->hasMany(ProductionLine::class, 'branch_id');
     }
 
+    public function maintenanceWorkOrders(): HasMany
+    {
+        return $this->hasMany(MaintenanceWorkOrder::class);
+    }
+
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class);

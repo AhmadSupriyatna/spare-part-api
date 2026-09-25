@@ -14,6 +14,7 @@ class Task extends Model
 
     protected $fillable = [
         'work_order_id',
+        'maintenance_work_order_id',
         'task_library_id',
         'equipment_id',
         'assigned_to',
@@ -47,6 +48,16 @@ class Task extends Model
         return $this->belongsTo(WorkOrder::class);
     }
 
+    /**
+     * Phase 3B Step 4's planning-layer WO — deliberately a different
+     * relation/column (maintenance_work_order_id) from the legacy
+     * workOrder() above; see MaintenanceWorkOrder's own docblock.
+     */
+    public function maintenanceWorkOrder(): BelongsTo
+    {
+        return $this->belongsTo(MaintenanceWorkOrder::class);
+    }
+
     public function taskLibrary(): BelongsTo
     {
         return $this->belongsTo(TaskLibrary::class);
@@ -75,6 +86,22 @@ class Task extends Model
     public function partStock(): BelongsTo
     {
         return $this->belongsTo(PartStock::class);
+    }
+
+    /**
+     * NEED_PLANNING / IN_WO / COMPLETED (Phase 3B Step 4) — derived, not a
+     * persisted column: a Completed/Cancelled task reports its real status
+     * verbatim (both are terminal and no longer relevant to planning
+     * either way), otherwise it's IN_WO once grouped into a
+     * MaintenanceWorkOrder or NEED_PLANNING while still ungrouped.
+     */
+    public function planningState(): string
+    {
+        if (in_array($this->status, [TaskStatus::Completed, TaskStatus::Cancelled], true)) {
+            return $this->status->value;
+        }
+
+        return $this->maintenance_work_order_id !== null ? 'in_wo' : 'need_planning';
     }
 
     public function isOverdue(): bool

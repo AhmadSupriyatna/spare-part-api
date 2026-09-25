@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Task;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\Task
+ * @mixin Task
  */
 class TaskResource extends JsonResource
 {
@@ -18,6 +19,8 @@ class TaskResource extends JsonResource
         return [
             'id' => $this->id,
             'work_order_id' => $this->work_order_id,
+            'maintenance_work_order_id' => $this->maintenance_work_order_id,
+            'planning_state' => $this->planningState(),
             'task_library_id' => $this->task_library_id,
             'equipment_id' => $this->equipment_id,
             'equipment_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->name),

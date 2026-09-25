@@ -22,6 +22,7 @@ use App\Models\Equipment;
 use App\Models\Task;
 use App\Models\TaskReschedule;
 use App\Services\PartLifetimeService;
+use App\Services\PmPlanningService;
 use App\Services\PmSchedulingService;
 use App\Services\TaskService;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,7 @@ class TaskController extends Controller
         private readonly TaskService $tasks,
         private readonly PmSchedulingService $scheduling,
         private readonly PartLifetimeService $lifetime,
+        private readonly PmPlanningService $planning,
     ) {}
 
     /**
@@ -63,14 +65,18 @@ class TaskController extends Controller
      * but always leaves a task_part_checks row), or ad-hoc/breakdown
      * (neither). Feeds the single Maintenance page (Calendar + List WO
      * views). Also the trigger point for Weekly/Monthly Task Library
-     * auto-recurrence and Part Lifetime auto-scheduling, since there's no
-     * real cron running in local dev — every page load "catches up" any
-     * missing occurrence for either source.
+     * auto-recurrence, Part Lifetime auto-scheduling, and (Phase 3B Step 5)
+     * sweeping overdue-and-still-unplanned Tasks into a WO, since there's
+     * no real cron running in local dev — every page load "catches up" any
+     * missing occurrence for all three.
      */
     public function pmSchedule(Branch $branch): AnonymousResourceCollection
     {
         $this->scheduling->ensureRecurringSchedules($branch);
         $this->lifetime->autoScheduleAllAtRisk($branch->id);
+        // Phase 3B Step 5 fallback — same "catch up on page view" spot as
+        // the two calls above, since there's no real cron in this app.
+        $this->planning->autoGroupOverdueUnplanned($branch->id);
 
         return TaskResource::collection(
             Task::query()

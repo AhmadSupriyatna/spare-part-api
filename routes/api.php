@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\PartStockController;
 use App\Http\Controllers\Api\PartSupplierController;
 use App\Http\Controllers\Api\PartUnitActionRequestController;
 use App\Http\Controllers\Api\PartUnitController;
+use App\Http\Controllers\Api\PmPlanningController;
 use App\Http\Controllers\Api\PublicBreakdownController;
 use App\Http\Controllers\Api\PublicPartUnitController;
 use App\Http\Controllers\Api\RackController;
@@ -116,6 +117,12 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::get('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'show']);
     Route::get('/branches/{branch}/pm-tasks', [TaskController::class, 'pmSchedule']);
     Route::get('/branches/{branch}/task-reschedules', [TaskController::class, 'rescheduleHistory']);
+
+    // Phase 3B Step 4 — PM planning layer (grouping Tasks into a WO): any
+    // authenticated role can read, same as Task Library above.
+    Route::get('/branches/{branch}/tasks-needing-planning', [PmPlanningController::class, 'needingPlanning']);
+    Route::get('/branches/{branch}/maintenance-work-orders', [PmPlanningController::class, 'indexWorkOrders']);
+    Route::get('/maintenance-work-orders/{workOrder}', [PmPlanningController::class, 'show']);
     Route::get('/branches/{branch}/part-lifetime-alerts', [PartInstallationController::class, 'atRisk']);
 
     // Part <-> Supplier (approved supplier list per part) relation, plus part
@@ -218,6 +225,11 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::post('/task-libraries/{taskLibrary}/parts', [TaskLibraryPartController::class, 'store']);
         Route::delete('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'destroy']);
         Route::post('/task-libraries/{taskLibrary}/schedule', [TaskLibraryController::class, 'schedule']);
+
+        // Phase 3B Step 4 — grouping Tasks into a WO is a planning action,
+        // same role slice as Task Library scheduling above.
+        Route::post('/branches/{branch}/maintenance-work-orders', [PmPlanningController::class, 'store']);
+        Route::post('/maintenance-work-orders/{workOrder}/mark-ready', [PmPlanningController::class, 'markReady']);
     });
 
     // Reorder request approvals: an "approve" action Supervisor keeps even

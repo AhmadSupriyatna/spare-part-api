@@ -32,6 +32,8 @@ class TaskService
             'started_at' => now(),
         ]);
 
+        $this->syncMaintenanceWorkOrder($task);
+
         return $task;
     }
 
@@ -136,6 +138,8 @@ class TaskService
                     $this->generateNextTask($workOrder, $locked);
                 }
             }
+
+            $this->syncMaintenanceWorkOrder($locked);
 
             return $locked;
         });
@@ -283,6 +287,8 @@ class TaskService
             'completion_notes' => $notes,
         ]);
 
+        $this->syncMaintenanceWorkOrder($task);
+
         return $task;
     }
 
@@ -334,5 +340,17 @@ class TaskService
             'part_stock_id' => $partStockId,
             'quantity_used' => null,
         ]);
+    }
+
+    /**
+     * Phase 3B Step 4 execution compatibility: start/complete/cancel work
+     * exactly as before whether or not a Task belongs to a
+     * MaintenanceWorkOrder — this only additionally keeps that WO's own
+     * status current afterward (see MaintenanceWorkOrder::
+     * syncStatusFromTasks()). A no-op for a Task with no WO.
+     */
+    private function syncMaintenanceWorkOrder(Task $task): void
+    {
+        $task->maintenanceWorkOrder?->syncStatusFromTasks();
     }
 }

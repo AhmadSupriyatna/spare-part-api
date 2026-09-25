@@ -9,6 +9,7 @@ use App\Models\Finding;
 use App\Models\Location;
 use App\Models\Machine;
 use App\Models\MaintenanceDecision;
+use App\Models\MaintenanceWorkOrder;
 use App\Models\PartInstallation;
 use App\Models\PartRepair;
 use App\Models\PartReplacementRequest;
@@ -37,7 +38,7 @@ class BranchScopeResolver
     {
         return match (true) {
             $model instanceof Branch => $model->id,
-            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack, $model instanceof Budget => $model->branch_id,
+            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack, $model instanceof Budget, $model instanceof MaintenanceWorkOrder => $model->branch_id,
             $model instanceof RackLevel => $model->rack->branch_id,
             $model instanceof PartUnitActionRequest => $model->branch_id,
             $model instanceof Machine => $model->line->branch_id,
