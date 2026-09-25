@@ -247,7 +247,7 @@ class AssetOutsideLineTest extends TestCase
         $this->assertSame('OL-COMPR-01', $response->json('data.code'));
     }
 
-    public function test_task_can_be_created_for_outside_line_equipment_and_needs_planning(): void
+    public function test_task_can_be_created_for_outside_line_equipment(): void
     {
         $equipment = Equipment::factory()->create(['machine_id' => null, 'branch_id' => $this->branch->id]);
 
@@ -258,7 +258,7 @@ class AssetOutsideLineTest extends TestCase
 
         $response->assertCreated();
         $task = Task::find($response->json('data.id'));
-        $this->assertSame('need_planning', $task->planningState());
+        $this->assertSame(TaskStatus::Pending->value, $task->status->value);
     }
 
     public function test_completing_a_task_for_outside_line_equipment_does_not_crash_on_missing_runtime_hours(): void

@@ -18,6 +18,7 @@ class ProductionLine extends Model
         'code',
         'name',
         'runtime_hours',
+        'avg_weekly_operating_hours',
         'is_active',
     ];
 
@@ -25,8 +26,21 @@ class ProductionLine extends Model
     {
         return [
             'runtime_hours' => 'integer',
+            'avg_weekly_operating_hours' => 'integer',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * This line's own average weekly operating hours if set, otherwise the
+     * company-wide default — used by PartLifetimeService's Life Based
+     * due-date projection and BudgetForecastService's pcs/year estimate,
+     * both of which used to read CompanySetting directly regardless of
+     * which line a part actually runs on.
+     */
+    public function effectiveAvgWeeklyOperatingHours(): int
+    {
+        return $this->avg_weekly_operating_hours ?? (CompanySetting::current()->avg_weekly_operating_hours ?: 85);
     }
 
     public function branch(): BelongsTo

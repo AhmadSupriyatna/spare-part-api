@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\Part;
 use App\Models\PartInstallation;
+use App\Models\ProductionLine;
 use Illuminate\Database\Eloquent\Builder;
 
 class BudgetForecastService
@@ -65,9 +66,12 @@ class BudgetForecastService
     /**
      * The core estimate, shared by priceItems() (persisted total) and
      * lineBreakdown() (the live per-line split of that same total): how
-     * many pcs/year a part is expected to need, from the branch's average
-     * weekly operating hours (same setting the PM schedule uses) and the
-     * part's rated lifetime — "estimasi life time (%)" tunes how much of
+     * many pcs/year a part is expected to need, from the average weekly
+     * operating hours across whichever Lines currently have this part
+     * installed in this branch (see averageWeeklyOperatingHoursFor() — each
+     * Line runs its own hours, this is no longer one flat company-wide
+     * number) and the part's rated lifetime — "estimasi life time (%)" tunes
+     * how much of
      * that rated life to actually assume (100% = the full rated life,
      * 90% = a safety margin assuming it only reaches 90% of that before
      * wearing out, which means MORE frequent replacement, not less).
@@ -89,7 +93,7 @@ class BudgetForecastService
             return ['pcs_per_year' => 0.0, 'unit_cost' => $adjustedUnitCost];
         }
 
-        $avgWeeklyHours = CompanySetting::current()->avg_weekly_operating_hours ?: 85;
+        $avgWeeklyHours = $this->averageWeeklyOperatingHoursFor($branch, $part);
         $hoursPerYear = $avgWeeklyHours * self::WEEKS_PER_YEAR;
 
         $effectiveLifetimeHours = $part->estimated_lifetime_hours * ($lifetimePercent / 100);
@@ -183,6 +187,34 @@ class BudgetForecastService
             PartInstallation::query()->where('part_id', $part->id)->whereNull('removed_at'),
             $branch->id
         )->count();
+    }
+
+    /**
+     * The average of ProductionLine::effectiveAvgWeeklyOperatingHours()
+     * across every distinct Line that currently has an active installation
+     * of this part in this branch (each Line counted once, not weighted by
+     * how many installations it has) — falls back to the company-wide
+     * default when the part has no installation on any Line at all (e.g.
+     * only on outside-line assets, or none yet), so a forecast can still be
+     * produced from the "add a part" drawer before anything is installed.
+     */
+    private function averageWeeklyOperatingHoursFor(Branch $branch, Part $part): int
+    {
+        $lines = $this->whereEquipmentInBranch(
+            PartInstallation::query()->where('part_id', $part->id)->whereNull('removed_at'),
+            $branch->id
+        )
+            ->with('equipment.machine.line')
+            ->get()
+            ->map(fn (PartInstallation $installation) => $installation->equipment->machine?->line)
+            ->filter()
+            ->unique('id');
+
+        if ($lines->isEmpty()) {
+            return CompanySetting::current()->avg_weekly_operating_hours ?: 85;
+        }
+
+        return (int) round($lines->avg(fn (ProductionLine $line) => $line->effectiveAvgWeeklyOperatingHours()));
     }
 
     private function unitCostFor(Branch $branch, Part $part): string

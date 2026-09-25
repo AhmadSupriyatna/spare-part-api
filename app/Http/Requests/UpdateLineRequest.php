@@ -35,6 +35,7 @@ class UpdateLineRequest extends FormRequest
                 Rule::unique('lines', 'code')->where('branch_id', $line->branch_id)->ignore($line),
             ],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'avg_weekly_operating_hours' => ['nullable', 'integer', 'min:1', 'max:168'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

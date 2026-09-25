@@ -157,16 +157,20 @@ class PartLifetimeService
     }
 
     /**
-     * remaining hours ÷ avg weekly operating hours (Settings, default 85) =
-     * weeks until the part is projected to be fully worn; the due date is
-     * the next Monday on or after that point (rounds forward, never lands
-     * mid-week), and never earlier than the coming Monday even if the
-     * calculation lands in the past (e.g. remaining hours already at 0).
+     * remaining hours ÷ avg weekly operating hours = weeks until the part is
+     * projected to be fully worn; the due date is the next Monday on or
+     * after that point (rounds forward, never lands mid-week), and never
+     * earlier than the coming Monday even if the calculation lands in the
+     * past (e.g. remaining hours already at 0). The rate is this
+     * installation's own Line's (falling back to the company-wide default
+     * if that Line hasn't set one) — not one flat company-wide number for
+     * every line, since lines don't necessarily all run the same hours/week.
      */
     public function computeAutoScheduleDueDate(PartInstallation $installation): Carbon
     {
         $remainingHours = $installation->partUnit?->remainingHours() ?? 0;
-        $avgWeeklyHours = CompanySetting::current()->avg_weekly_operating_hours ?: 85;
+        $avgWeeklyHours = $installation->equipment->machine?->line?->effectiveAvgWeeklyOperatingHours()
+            ?? (CompanySetting::current()->avg_weekly_operating_hours ?: 85);
         $weeksNeeded = (int) ceil($remainingHours / $avgWeeklyHours);
 
         $target = $this->mondayOnOrAfter(now()->addWeeks($weeksNeeded));

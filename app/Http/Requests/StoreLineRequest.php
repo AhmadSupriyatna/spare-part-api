@@ -33,6 +33,7 @@ class StoreLineRequest extends FormRequest
                 Rule::unique('lines', 'code')->where('branch_id', $this->route('branch')?->id),
             ],
             'name' => ['required', 'string', 'max:255'],
+            'avg_weekly_operating_hours' => ['nullable', 'integer', 'min:1', 'max:168'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

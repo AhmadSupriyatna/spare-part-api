@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\ProductionLine;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\ProductionLine
+ * @mixin ProductionLine
  */
 class LineResource extends JsonResource
 {
@@ -21,6 +22,7 @@ class LineResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'runtime_hours' => $this->runtime_hours,
+            'avg_weekly_operating_hours' => $this->avg_weekly_operating_hours,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

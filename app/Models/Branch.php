@@ -56,11 +56,6 @@ class Branch extends Model
         return $this->hasMany(ProductionLine::class, 'branch_id');
     }
 
-    public function maintenanceWorkOrders(): HasMany
-    {
-        return $this->hasMany(MaintenanceWorkOrder::class);
-    }
-
     /** Only outside-line assets — production Equipment is reached via lines()->machines()->equipment(). */
     public function equipment(): HasMany
     {

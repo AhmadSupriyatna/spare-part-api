@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Enums\PartReplacementStrategy;
 use App\Enums\TaskStatus;
 use App\Enums\UserRole;
-use App\Exceptions\TaskAlreadyInWorkOrderException;
 use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Machine;
@@ -14,26 +13,24 @@ use App\Models\PartInstallation;
 use App\Models\PartStock;
 use App\Models\ProductionLine;
 use App\Models\Task;
-use App\Models\TaskLibrary;
 use App\Models\User;
 use App\Services\PartLifecycleService;
 use App\Services\PartLifetimeService;
-use App\Services\PmPlanningService;
-use App\Services\PmSchedulingService;
 use App\Services\TaskService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Phase 3B Step 5 — Life Based Task -> PM Planning / WO. Confirms the audit
- * finding that Task Library (Step 4's PmPlanningService/needingPlanning/
- * createFromTasks) is already fully generic over Task origin — a Life Based
- * Task (PartLifetimeService::scheduleFromLifetime(), no task_library_id)
- * already participates in planning/grouping/execution exactly like a Task
- * Library one, with zero production-code change required. These tests exist
- * to pin that behavior down explicitly, since nothing previously exercised
- * PartLifetimeService at all.
+ * Phase 3B Step 5 — Life Based Task scheduling. There is no PM Planning/
+ * MaintenanceWorkOrder layer any more (removed per explicit request: every
+ * Task, whether from a Task Library recipe or a Life Based trigger, is
+ * scheduled and executed directly — no manual "group into a WO" step, the
+ * PM Calendar's own drag-and-drop reschedule is the correction mechanism).
+ * These tests confirm a Life Based Task is a completely ordinary Task —
+ * Pending, no WO of any kind, executes and replaces its part normally —
+ * plus the duplicate-protection and threshold behavior nothing previously
+ * exercised at all.
  */
 class LifeBasedPlanningTest extends TestCase
 {
@@ -87,7 +84,7 @@ class LifeBasedPlanningTest extends TestCase
         return $installation->fresh();
     }
 
-    // --- Step 1 audit, pinned down: trigger creates a normal Task ---
+    // --- Trigger creates a normal, immediately-executable Task ---
 
     public function test_life_based_trigger_creates_a_normal_task(): void
     {
@@ -103,98 +100,23 @@ class LifeBasedPlanningTest extends TestCase
         $this->assertSame($this->part->id, $task->partChecks()->first()->part_id);
     }
 
-    public function test_generated_task_starts_as_need_planning(): void
+    public function test_generated_life_based_task_has_no_wo_of_any_kind(): void
     {
         $this->installAtRiskPart();
         app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
 
         $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
 
-        $this->assertSame('need_planning', $task->planningState());
-    }
-
-    public function test_generated_life_based_task_has_no_wo_initially(): void
-    {
-        $this->installAtRiskPart();
-        app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
-
-        $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-
-        $this->assertNull($task->maintenance_work_order_id);
         $this->assertNull($task->work_order_id);
     }
 
-    // --- Step 2/3: planning + grouping ---
+    // --- Execution / replacement-lifecycle ---
 
-    public function test_life_based_task_appears_in_pm_planning(): void
-    {
-        $this->installAtRiskPart();
-        app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
-        $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-
-        $needingPlanning = app(PmPlanningService::class)->needingPlanning($this->branch->id);
-
-        $this->assertTrue($needingPlanning->contains('id', $task->id));
-    }
-
-    public function test_life_based_task_can_be_grouped_into_a_maintenance_work_order(): void
-    {
-        $this->installAtRiskPart();
-        app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
-        $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-
-        $workOrder = app(PmPlanningService::class)->createFromTasks($this->branch->id, [$task->id], $this->user->id);
-
-        $this->assertSame($workOrder->id, $task->fresh()->maintenance_work_order_id);
-        $this->assertSame('in_wo', $task->fresh()->planningState());
-    }
-
-    public function test_life_based_task_cannot_be_grouped_twice(): void
-    {
-        $this->installAtRiskPart();
-        app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
-        $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-
-        app(PmPlanningService::class)->createFromTasks($this->branch->id, [$task->id], $this->user->id);
-
-        $this->expectException(TaskAlreadyInWorkOrderException::class);
-        app(PmPlanningService::class)->createFromTasks($this->branch->id, [$task->id], $this->user->id);
-    }
-
-    /** A Life Based Task must not require Task Library membership to be grouped alongside a Scheduled Maintenance one. */
-    public function test_life_based_task_can_be_grouped_with_a_scheduled_maintenance_task(): void
-    {
-        $this->installAtRiskPart();
-        app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
-        $lifeBasedTask = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-
-        $library = TaskLibrary::create([
-            'equipment_id' => $this->equipment->id,
-            'code' => 'TL-TEST-01',
-            'title' => 'Cek Rutin',
-            'is_active' => true,
-        ]);
-        $scheduledTask = app(PmSchedulingService::class)->schedule($library, now()->addDay()->toDateString(), null);
-
-        $workOrder = app(PmPlanningService::class)->createFromTasks(
-            $this->branch->id,
-            [$lifeBasedTask->id, $scheduledTask->id],
-            $this->user->id,
-        );
-
-        $this->assertSame($workOrder->id, $lifeBasedTask->fresh()->maintenance_work_order_id);
-        $this->assertSame($workOrder->id, $scheduledTask->fresh()->maintenance_work_order_id);
-        $this->assertSame(2, $workOrder->fresh()->tasks()->count());
-    }
-
-    // --- Execution / replacement-lifecycle compatibility ---
-
-    public function test_task_execution_still_works_after_being_placed_in_a_wo(): void
+    public function test_task_execution_works_directly_with_no_planning_step(): void
     {
         $installation = $this->installAtRiskPart();
         app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
         $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-        app(PmPlanningService::class)->createFromTasks($this->branch->id, [$task->id], $this->user->id);
 
         PartStock::factory()->create(['part_id' => $this->part->id, 'branch_id' => $this->branch->id, 'quantity_on_hand' => 10]);
         $check = $task->partChecks()->firstOrFail();
@@ -218,7 +140,6 @@ class LifeBasedPlanningTest extends TestCase
         $installation = $this->installAtRiskPart();
         app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
         $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-        app(PmPlanningService::class)->createFromTasks($this->branch->id, [$task->id], $this->user->id);
 
         PartStock::factory()->create(['part_id' => $this->part->id, 'branch_id' => $this->branch->id, 'quantity_on_hand' => 10]);
         $check = $task->partChecks()->firstOrFail();
@@ -239,7 +160,7 @@ class LifeBasedPlanningTest extends TestCase
         $this->assertNotSame($installation->id, $newInstallation->id);
     }
 
-    // --- Step 4: duplicate protection under repeated catch-up ---
+    // --- Duplicate protection under repeated catch-up ---
 
     public function test_repeated_scheduling_catchup_does_not_duplicate_the_life_based_task(): void
     {
@@ -252,21 +173,7 @@ class LifeBasedPlanningTest extends TestCase
         $this->assertSame(1, Task::where('equipment_id', $this->equipment->id)->count());
     }
 
-    public function test_duplicate_protection_survives_the_task_being_grouped_into_a_wo(): void
-    {
-        $this->installAtRiskPart();
-        app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
-        $task = Task::where('equipment_id', $this->equipment->id)->firstOrFail();
-        app(PmPlanningService::class)->createFromTasks($this->branch->id, [$task->id], $this->user->id);
-
-        // Catch-up runs again (e.g. a later PM Calendar page load) — must not
-        // create a second Life Based task just because this one is now IN_WO.
-        app(PartLifetimeService::class)->autoScheduleAllAtRisk($this->branch->id);
-
-        $this->assertSame(1, Task::where('equipment_id', $this->equipment->id)->count());
-    }
-
-    // --- Step 1 audit, pinned down: existing threshold behavior unchanged ---
+    // --- Existing threshold behavior unchanged ---
 
     public function test_existing_lifetime_threshold_behavior_remains_unchanged(): void
     {
@@ -281,7 +188,38 @@ class LifeBasedPlanningTest extends TestCase
         $this->assertSame(0, Task::where('equipment_id', $this->equipment->id)->count());
     }
 
-    // --- Step 5: Outside Line deferral ---
+    // --- Per-line average weekly operating hours ---
+
+    public function test_due_date_projection_uses_the_installations_own_line_override(): void
+    {
+        $installation = $this->installAtRiskPart();
+        $lifetime = app(PartLifetimeService::class);
+
+        $this->line->update(['avg_weekly_operating_hours' => 10]); // slow line: more weeks needed
+        $slowDueDate = $lifetime->computeAutoScheduleDueDate($installation->fresh());
+
+        $this->line->update(['avg_weekly_operating_hours' => 500]); // fast line: fewer weeks needed
+        $fastDueDate = $lifetime->computeAutoScheduleDueDate($installation->fresh());
+
+        // A line that runs far more hours/week wears the remaining lifetime
+        // out sooner, so its projected due date must land no later than the
+        // slow line's — confirms the override actually drives the
+        // calculation instead of both using one flat company-wide number.
+        $this->assertTrue($fastDueDate->lte($slowDueDate));
+    }
+
+    public function test_due_date_projection_falls_back_to_company_default_when_line_has_no_override(): void
+    {
+        $installation = $this->installAtRiskPart();
+        $this->line->update(['avg_weekly_operating_hours' => null]);
+
+        // Should not throw, and should compute using the 85/week company default.
+        $dueDate = app(PartLifetimeService::class)->computeAutoScheduleDueDate($installation->fresh());
+
+        $this->assertNotNull($dueDate);
+    }
+
+    // --- Outside Line deferral ---
 
     public function test_outside_line_equipment_without_runtime_source_does_not_produce_incorrect_life_based_schedule(): void
     {
