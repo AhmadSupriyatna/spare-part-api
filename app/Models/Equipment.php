@@ -31,6 +31,19 @@ class Equipment extends Model
         return $this->belongsTo(Machine::class);
     }
 
+    /**
+     * Line.code-Machine.code-Equipment.code — each of those 3 is only
+     * unique WITHIN its own parent (see the unique(['line_id'/'machine_id',
+     * 'code']) constraints), so this composed string is what's actually
+     * unique enough to safely build a global identifier from (e.g. a Task
+     * Library code) — the bare equipment.code alone is not, and two
+     * equipment under different machines/lines can legitimately share one.
+     */
+    public function hierarchicalCode(): string
+    {
+        return "{$this->machine->line->code}-{$this->machine->code}-{$this->code}";
+    }
+
     public function workOrders(): HasMany
     {
         return $this->hasMany(WorkOrder::class);

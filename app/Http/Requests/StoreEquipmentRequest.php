@@ -16,6 +16,10 @@ class StoreEquipmentRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->mergeIfMissing(['is_active' => true]);
+
+        if ($this->filled('code')) {
+            $this->merge(['code' => strtoupper(trim((string) $this->input('code')))]);
+        }
     }
 
     /**

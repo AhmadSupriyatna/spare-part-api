@@ -56,8 +56,15 @@ class TaskLibraryController extends Controller
         unset($data['parts']);
 
         $library = DB::transaction(function () use ($equipment, $data, $partsData) {
+            // Sequence is already scoped to this exact equipment_id (not by
+            // code prefix), so it was never the source of collisions.
             $sequence = $equipment->taskLibraries()->count() + 1;
-            $data['code'] = $equipment->code.'-'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT);
+            // equipment.code alone is only unique WITHIN its own machine
+            // (see Equipment::hierarchicalCode()) - two equipment under
+            // different machines/lines can legitimately share one, which
+            // used to collide here against task_libraries' globally-unique
+            // code column. The hierarchical code is unique enough instead.
+            $data['code'] = $equipment->hierarchicalCode().'-'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT);
 
             $library = $equipment->taskLibraries()->create($data);
 

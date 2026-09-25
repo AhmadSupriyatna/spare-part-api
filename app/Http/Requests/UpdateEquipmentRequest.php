@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Equipment;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -13,12 +14,19 @@ class UpdateEquipmentRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('code')) {
+            $this->merge(['code' => strtoupper(trim((string) $this->input('code')))]);
+        }
+    }
+
     /**
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
-        /** @var \App\Models\Equipment $equipment */
+        /** @var Equipment $equipment */
         $equipment = $this->route('equipment');
 
         return [

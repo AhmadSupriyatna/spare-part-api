@@ -23,6 +23,7 @@ class EquipmentResource extends JsonResource
             'line_id' => $this->whenLoaded('machine', fn () => $this->machine?->line_id),
             'line_name' => $this->whenLoaded('machine', fn () => $this->machine?->line?->name),
             'code' => $this->code,
+            'hierarchical_code' => $this->whenLoaded('machine', fn () => $this->hierarchicalCode()),
             'name' => $this->name,
             'category' => $this->category,
             'is_active' => $this->is_active,
