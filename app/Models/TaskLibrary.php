@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ScheduleType;
+use App\Enums\TaskLibraryMaintenanceCategory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,6 +15,7 @@ class TaskLibrary extends Model
         'code',
         'title',
         'description',
+        'maintenance_category',
         'schedule_type',
         'interval_days',
         'interval_hours',
@@ -24,6 +26,7 @@ class TaskLibrary extends Model
     protected function casts(): array
     {
         return [
+            'maintenance_category' => TaskLibraryMaintenanceCategory::class,
             'schedule_type' => ScheduleType::class,
             'interval_days' => 'integer',
             'interval_hours' => 'integer',

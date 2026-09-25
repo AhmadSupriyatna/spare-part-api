@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\TaskLibrary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\TaskLibrary
+ * @mixin TaskLibrary
  */
 class TaskLibraryResource extends JsonResource
 {
@@ -25,6 +26,7 @@ class TaskLibraryResource extends JsonResource
             'line_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->machine?->line?->name),
             'title' => $this->title,
             'description' => $this->description,
+            'maintenance_category' => $this->maintenance_category?->value,
             'schedule_type' => $this->schedule_type?->value,
             'interval_days' => $this->interval_days,
             'interval_hours' => $this->interval_hours,
