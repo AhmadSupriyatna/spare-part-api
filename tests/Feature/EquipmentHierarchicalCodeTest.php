@@ -166,32 +166,12 @@ class EquipmentHierarchicalCodeTest extends TestCase
         $this->assertSame('G2', $response->json('data.code'));
     }
 
-    public function test_machine_code_is_trimmed_and_uppercased_on_update(): void
-    {
-        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
-        $machine = Machine::factory()->create(['line_id' => $line->id, 'code' => 'OLD']);
-
-        $response = $this->actingAs($this->admin)->putJson("/api/machines/{$machine->id}", [
-            'code' => ' new-code ',
-        ]);
-
-        $response->assertOk();
-        $this->assertSame('NEW-CODE', $response->json('data.code'));
-    }
-
-    public function test_equipment_code_is_trimmed_and_uppercased_on_create(): void
-    {
-        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
-        $machine = Machine::factory()->create(['line_id' => $line->id]);
-
-        $response = $this->actingAs($this->admin)->postJson("/api/machines/{$machine->id}/equipment", [
-            'code' => ' mh ',
-            'name' => 'Motor Head',
-        ]);
-
-        $response->assertCreated();
-        $this->assertSame('MH', $response->json('data.code'));
-    }
+    // Machine.code/Equipment.code trim+uppercase normalization tests were
+    // removed from here — both fields are no longer client-supplied at all
+    // (see the Equipment/Machine Code UX step: they're system-generated
+    // from `name`). That behavior is covered by
+    // MachineEquipmentCodeGenerationTest.php instead. Line.code is still
+    // manually entered, so its normalization test above remains valid.
 
     /** hierarchical_code appears on EquipmentResource only when the machine relation is eager-loaded (matches machine_name/line_name's existing whenLoaded pattern). */
     public function test_hierarchical_code_is_exposed_on_equipment_show(): void

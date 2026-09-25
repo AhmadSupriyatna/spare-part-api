@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreMachineRequest extends FormRequest
 {
@@ -16,22 +15,18 @@ class StoreMachineRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->mergeIfMissing(['is_active' => true]);
-
-        if ($this->filled('code')) {
-            $this->merge(['code' => strtoupper(trim((string) $this->input('code')))]);
-        }
     }
 
     /**
+     * No `code` here on purpose — it's system-generated from `name` in
+     * MachineController::store() (see Machine::generateCode()), never
+     * client-supplied.
+     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
-            'code' => [
-                'required', 'string', 'max:50',
-                Rule::unique('machines', 'code')->where('line_id', $this->route('line')?->id),
-            ],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:100'],
             'is_active' => ['sometimes', 'boolean'],

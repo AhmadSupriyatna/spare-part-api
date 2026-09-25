@@ -21,7 +21,10 @@ class EquipmentController extends Controller
 
     public function store(StoreEquipmentRequest $request, Machine $machine): EquipmentResource
     {
-        $equipment = $machine->equipment()->create($request->validated());
+        $data = $request->validated();
+        $data['code'] = Equipment::generateCode($data['name'], $machine->id);
+
+        $equipment = $machine->equipment()->create($data);
 
         return new EquipmentResource($equipment);
     }

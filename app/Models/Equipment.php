@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Equipment extends Model
 {
@@ -42,6 +43,26 @@ class Equipment extends Model
     public function hierarchicalCode(): string
     {
         return "{$this->machine->line->code}-{$this->machine->code}-{$this->code}";
+    }
+
+    /**
+     * Deterministic, collision-safe within its Machine (matches the
+     * unique(['machine_id', 'code']) constraint): an uppercase slug of the
+     * name, with a numeric suffix appended only if that exact slug is
+     * already taken by a sibling Equipment on the same Machine. Never
+     * touches an already-persisted code — this is only ever called once,
+     * at creation, from EquipmentController::store().
+     */
+    public static function generateCode(string $name, int $machineId): string
+    {
+        $base = Str::upper(Str::slug($name, '-'));
+        $code = $base;
+
+        for ($suffix = 2; static::where('machine_id', $machineId)->where('code', $code)->exists(); $suffix++) {
+            $code = "{$base}-{$suffix}";
+        }
+
+        return $code;
     }
 
     public function workOrders(): HasMany

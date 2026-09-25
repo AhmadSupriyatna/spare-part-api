@@ -21,7 +21,10 @@ class MachineController extends Controller
 
     public function store(StoreMachineRequest $request, ProductionLine $line): MachineResource
     {
-        $machine = $line->machines()->create($request->validated());
+        $data = $request->validated();
+        $data['code'] = Machine::generateCode($data['name'], $line->id);
+
+        $machine = $line->machines()->create($data);
 
         return new MachineResource($machine);
     }
