@@ -61,6 +61,12 @@ class Branch extends Model
         return $this->hasMany(MaintenanceWorkOrder::class);
     }
 
+    /** Only outside-line assets — production Equipment is reached via lines()->machines()->equipment(). */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(Equipment::class);
+    }
+
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class);

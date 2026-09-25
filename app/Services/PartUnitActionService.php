@@ -46,14 +46,14 @@ class PartUnitActionService
             }
 
             $equipmentId = $installation->equipment_id;
-            $branchId = $installation->equipment->machine->line->branch_id;
+            $branchId = $installation->equipment->resolvedBranchId();
         } else {
             if ($unit->status !== PartUnitStatus::Available) {
                 throw new PartUnitNotAvailableException($unit->id);
             }
 
             $equipment = Equipment::with('machine.line')->findOrFail($equipmentId);
-            $branchId = $equipment->machine->line->branch_id;
+            $branchId = $equipment->resolvedBranchId();
         }
 
         return PartUnitActionRequest::create([

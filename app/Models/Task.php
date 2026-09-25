@@ -115,7 +115,10 @@ class Task extends Model
         }
 
         if ($this->due_runtime_hours !== null) {
-            return $this->equipment->machine->line->runtime_hours >= $this->due_runtime_hours;
+            // Phase 3B "Asset Outside Line": no Line means no runtime-hours
+            // source (out of scope to solve here) — never considered
+            // overdue via this path rather than crashing.
+            return ($this->equipment->machine?->line?->runtime_hours ?? 0) >= $this->due_runtime_hours;
         }
 
         return false;

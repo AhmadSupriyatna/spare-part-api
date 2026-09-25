@@ -66,7 +66,7 @@ class PartReplacementService
             }
 
             $equipment = $locked->equipment()->with('machine.line.branch')->first();
-            $branchId = $equipment->machine->line->branch_id;
+            $branchId = $equipment->resolvedBranchId();
 
             $partStock = PartStock::where('part_id', $locked->part_id)
                 ->where('branch_id', $branchId)

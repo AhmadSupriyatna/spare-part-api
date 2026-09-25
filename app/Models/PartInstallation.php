@@ -72,8 +72,12 @@ class PartInstallation extends Model
             return null;
         }
 
+        // Phase 3B "Asset Outside Line": no Line means no runtime-hours
+        // source (out of scope to solve here) — falls back to 0 rather
+        // than crashing.
         $currentHours = $this->removed_at_runtime_hours
-            ?? $this->equipment->machine->line->runtime_hours;
+            ?? $this->equipment->machine?->line?->runtime_hours
+            ?? 0;
 
         return max(0, $currentHours - $this->installed_at_runtime_hours);
     }

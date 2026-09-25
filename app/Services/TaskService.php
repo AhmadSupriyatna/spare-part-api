@@ -104,7 +104,7 @@ class TaskService
 
                 if ($locked->part_stock_id && $locked->quantity_used) {
                     $partStock = $locked->partStock;
-                    $branchId = $locked->equipment->machine->line->branch_id;
+                    $branchId = $locked->equipment->resolvedBranchId();
 
                     // Never trust that a submitted (or pre-filled) part_stock_id
                     // actually belongs to this task's own equipment's plant —
@@ -150,7 +150,7 @@ class TaskService
      */
     private function completeChecklist(Task $task, ?User $user, array $checks): void
     {
-        $branchId = $task->equipment->machine->line->branch_id;
+        $branchId = $task->equipment->resolvedBranchId();
 
         // The client says which part a checklist row is for, but that's
         // never trusted at face value — it must match what the actual
@@ -316,13 +316,17 @@ class TaskService
         }
 
         if ($workOrder->schedule_type === ScheduleType::Runtime && $workOrder->interval_hours) {
-            $dueRuntimeHours = $workOrder->equipment->machine->line->runtime_hours + $workOrder->interval_hours;
+            // Phase 3B "Asset Outside Line": no Line means no runtime-hours
+            // source at all (out of scope to solve here) — falls back to 0
+            // rather than crashing, same as everywhere else this reads
+            // line runtime hours.
+            $dueRuntimeHours = ($workOrder->equipment->machine?->line?->runtime_hours ?? 0) + $workOrder->interval_hours;
         }
 
         $partStockId = null;
 
         if ($workOrder->part_id) {
-            $branchId = $workOrder->equipment->machine->line->branch_id;
+            $branchId = $workOrder->equipment->resolvedBranchId();
 
             $partStockId = PartStock::where('part_id', $workOrder->part_id)
                 ->where('branch_id', $branchId)

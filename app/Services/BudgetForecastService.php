@@ -7,10 +7,25 @@ use App\Models\Branch;
 use App\Models\CompanySetting;
 use App\Models\Part;
 use App\Models\PartInstallation;
+use Illuminate\Database\Eloquent\Builder;
 
 class BudgetForecastService
 {
     private const WEEKS_PER_YEAR = 52;
+
+    /**
+     * Phase 3B "Asset Outside Line": matches an already-built
+     * PartInstallation query to a branch — production via
+     * equipment.machine.line.branch_id (unchanged), an outside-line
+     * installation via its own equipment.branch_id directly.
+     */
+    private function whereEquipmentInBranch(Builder $query, int $branchId): Builder
+    {
+        return $query->where(function (Builder $q) use ($branchId) {
+            $q->whereHas('equipment.machine.line', fn (Builder $q2) => $q2->where('branch_id', $branchId))
+                ->orWhereHas('equipment', fn (Builder $q2) => $q2->where('branch_id', $branchId));
+        });
+    }
 
     /**
      * Parts under one replacement strategy (branch-wide) that currently have
@@ -126,30 +141,33 @@ class BudgetForecastService
      * PartInstallation data rather than stored, so it never goes stale as
      * parts get moved/replaced after the budget was saved.
      *
-     * @return list<array{line_id: int, line_name: string, active_installations: int, pcs_per_year: float, estimated_cost: string}>
+     * @return list<array{line_id: int|null, line_name: string, active_installations: int, pcs_per_year: float, estimated_cost: string}>
      */
     public function lineBreakdown(Branch $branch, Part $part, float $lifetimePercent, float $priceIncreasePercent): array
     {
         $rates = $this->ratesFor($branch, $part, $lifetimePercent, $priceIncreasePercent);
 
-        $installations = PartInstallation::query()
-            ->where('part_id', $part->id)
-            ->whereNull('removed_at')
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+        $installations = $this->whereEquipmentInBranch(
+            PartInstallation::query()->where('part_id', $part->id)->whereNull('removed_at'),
+            $branch->id
+        )
             ->with('equipment.machine.line')
             ->get()
-            ->groupBy(fn (PartInstallation $installation) => $installation->equipment->machine->line->id);
+            // null (grouped together) for an outside-line installation —
+            // there's no Line to split those by, so they land in one
+            // "Luar Line" bucket in the breakdown below instead of crashing.
+            ->groupBy(fn (PartInstallation $installation) => $installation->equipment->machine?->line_id);
 
         $breakdown = [];
 
-        foreach ($installations as $lineId => $group) {
-            $line = $group->first()->equipment->machine->line;
+        foreach ($installations as $group) {
+            $line = $group->first()->equipment->machine?->line;
             $count = $group->count();
             $pcsPerYear = $rates['pcs_per_year'] * $count;
 
             $breakdown[] = [
-                'line_id' => $line->id,
-                'line_name' => $line->name,
+                'line_id' => $line?->id,
+                'line_name' => $line?->name ?? 'Luar Line',
                 'active_installations' => $count,
                 'pcs_per_year' => round($pcsPerYear, 2),
                 'estimated_cost' => bcmul((string) $pcsPerYear, $rates['unit_cost'], 2),
@@ -161,11 +179,10 @@ class BudgetForecastService
 
     private function activeInstallationCount(Branch $branch, Part $part): int
     {
-        return PartInstallation::query()
-            ->where('part_id', $part->id)
-            ->whereNull('removed_at')
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
-            ->count();
+        return $this->whereEquipmentInBranch(
+            PartInstallation::query()->where('part_id', $part->id)->whereNull('removed_at'),
+            $branch->id
+        )->count();
     }
 
     private function unitCostFor(Branch $branch, Part $part): string

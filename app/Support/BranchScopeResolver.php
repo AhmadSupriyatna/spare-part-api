@@ -42,17 +42,24 @@ class BranchScopeResolver
             $model instanceof RackLevel => $model->rack->branch_id,
             $model instanceof PartUnitActionRequest => $model->branch_id,
             $model instanceof Machine => $model->line->branch_id,
-            $model instanceof Equipment => $model->machine->line->branch_id,
-            $model instanceof Finding => $model->equipment->machine->line->branch_id,
+            // Phase 3B "Asset Outside Line": Equipment::resolvedBranchId()
+            // handles both production (via machine->line) and an
+            // outside-line asset (its own branch_id) — this is the
+            // authorization chokepoint, so every model that resolves a
+            // branch through an equipment_id now goes through it too,
+            // instead of repeating the (previously crash-prone for an
+            // outside-line asset) raw ->machine->line->branch_id chain.
+            $model instanceof Equipment => $model->resolvedBranchId(),
+            $model instanceof Finding => $model->equipment->resolvedBranchId(),
             // Step 7: without this, ActivityLogController::index()'s
             // branch-filter (this same resolver) would silently drop every
             // MaintenanceDecision activity row — decisions never resolve to
             // a branch on their own, only via their Finding's equipment.
-            $model instanceof MaintenanceDecision => $model->finding->equipment->machine->line->branch_id,
-            $model instanceof WorkOrder, $model instanceof Task, $model instanceof TaskLibrary, $model instanceof PartInstallation, $model instanceof PartReplacementRequest => $model->equipment->machine->line->branch_id,
-            $model instanceof TaskLibraryPart => $model->taskLibrary->equipment->machine->line->branch_id,
+            $model instanceof MaintenanceDecision => $model->finding->equipment->resolvedBranchId(),
+            $model instanceof WorkOrder, $model instanceof Task, $model instanceof TaskLibrary, $model instanceof PartInstallation, $model instanceof PartReplacementRequest => $model->equipment->resolvedBranchId(),
+            $model instanceof TaskLibraryPart => $model->taskLibrary->equipment->resolvedBranchId(),
             $model instanceof PartSupplier => $model->supplier->branch_id,
-            $model instanceof PartRepair => $model->partInstallation?->equipment?->machine?->line?->branch_id,
+            $model instanceof PartRepair => $model->partInstallation?->equipment?->resolvedBranchId(),
             $model instanceof PartUnit => $this->resolvePartUnitBranch($model),
             default => null,
         };
@@ -62,6 +69,6 @@ class BranchScopeResolver
     {
         $installation = $unit->currentInstallation() ?? $unit->installations()->latest('installed_at')->first();
 
-        return $installation?->equipment?->machine?->line?->branch_id;
+        return $installation?->equipment?->resolvedBranchId();
     }
 }

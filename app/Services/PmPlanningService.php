@@ -35,7 +35,12 @@ class PmPlanningService
         return Task::query()
             ->where('status', TaskStatus::Pending)
             ->whereNull('maintenance_work_order_id')
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branchId))
+            // Phase 3B "Asset Outside Line": also match a Task whose
+            // equipment has no machine at all, via its own branch_id.
+            ->where(function ($q) use ($branchId) {
+                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branchId))
+                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branchId));
+            })
             ->with(['equipment.machine.line', 'assignee', 'taskLibrary', 'partChecks.part'])
             ->orderBy('due_date')
             ->get();
@@ -86,14 +91,17 @@ class PmPlanningService
                     );
                 }
 
-                if ($task->equipment->machine->line->branch_id !== $branchId) {
+                if ($task->equipment->resolvedBranchId() !== $branchId) {
                     throw new TaskNotEligibleForPlanningException(
                         "Tugas #{$task->id} bukan dari plant yang sama."
                     );
                 }
             }
 
-            $lineIds = $tasks->map(fn (Task $task) => $task->equipment->machine->line_id)->unique();
+            // null for an outside-line Task (no machine to read a line_id
+            // from) — naturally excluded from the "every task agrees"
+            // check below, same as a genuine cross-line disagreement would be.
+            $lineIds = $tasks->map(fn (Task $task) => $task->equipment->machine?->line_id)->unique();
             $dueDates = $tasks->pluck('due_date')->filter()->map(fn ($date) => $date->toDateString())->unique();
 
             $workOrder = MaintenanceWorkOrder::create([
@@ -129,10 +137,20 @@ class PmPlanningService
             ->whereNull('maintenance_work_order_id')
             ->whereNotNull('due_date')
             ->where('due_date', '<', now()->toDateString())
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branchId))
+            // Phase 3B "Asset Outside Line": also sweep up an overdue Task
+            // whose equipment has no machine at all, via its own branch_id.
+            ->where(function ($q) use ($branchId) {
+                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branchId))
+                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branchId));
+            })
             ->with('equipment.machine.line')
             ->get()
-            ->groupBy(fn (Task $task) => $task->equipment->machine->line_id.'|'.$task->due_date->toDateString());
+            // machine?->line_id is null for an outside-line Task — every
+            // such task on this branch (regardless of which asset) lands in
+            // one "null|<date>" group per due date, since there's no Line
+            // to split them by. Still deterministic, just a coarser grain
+            // than the Line-scoped grouping production equipment gets.
+            ->groupBy(fn (Task $task) => $task->equipment->machine?->line_id.'|'.$task->due_date->toDateString());
 
         foreach ($overdue as $group) {
             $this->createFromTasks($branchId, $group->pluck('id')->all(), null);

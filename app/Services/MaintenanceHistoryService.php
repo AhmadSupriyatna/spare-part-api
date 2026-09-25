@@ -12,6 +12,7 @@ use App\Models\PartRepair;
 use App\Models\PartReplacementRequest;
 use App\Models\Task;
 use App\Models\TaskPartCheck;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Date;
@@ -56,6 +57,23 @@ use Illuminate\Support\Facades\Date;
 class MaintenanceHistoryService
 {
     private const PER_SOURCE_LIMIT = 500;
+
+    /**
+     * Phase 3B "Asset Outside Line" — matches a query already scoped to some
+     * relation path ending in `equipment` (e.g. 'equipment',
+     * 'partInstallation.equipment', 'finding.equipment') to a branch:
+     * production equipment via machine.line.branch_id (unchanged), an
+     * outside-line one via its own equipment.branch_id directly. Centralized
+     * here instead of duplicating both halves at each of the 5 call sites
+     * below.
+     */
+    private function whereEquipmentInBranch(Builder $query, string $equipmentRelationPath, int $branchId): Builder
+    {
+        return $query->where(function (Builder $q) use ($equipmentRelationPath, $branchId) {
+            $q->whereHas("{$equipmentRelationPath}.machine.line", fn (Builder $q2) => $q2->where('branch_id', $branchId))
+                ->orWhereHas($equipmentRelationPath, fn (Builder $q2) => $q2->where('branch_id', $branchId));
+        });
+    }
 
     /**
      * @param  array{equipment_id?: ?int, part_id?: ?int, event_type?: ?string, date_from?: ?string, date_to?: ?string}  $filters
@@ -105,8 +123,7 @@ class MaintenanceHistoryService
      */
     private function pmRows(Branch $branch, ?int $equipmentId, ?int $partId, ?Carbon $from, ?Carbon $to): Collection
     {
-        $tasks = Task::query()
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+        $tasks = $this->whereEquipmentInBranch(Task::query(), 'equipment', $branch->id)
             ->where('status', TaskStatus::Completed)
             // A Completed Task always has completed_at set by
             // TaskService::complete() — this guard is only defensive, so a
@@ -216,8 +233,7 @@ class MaintenanceHistoryService
      */
     private function findingRows(Branch $branch, ?int $equipmentId, ?int $partId, ?Carbon $from, ?Carbon $to): Collection
     {
-        $findings = Finding::query()
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+        $findings = $this->whereEquipmentInBranch(Finding::query(), 'equipment', $branch->id)
             ->when($equipmentId, fn ($q) => $q->where('equipment_id', $equipmentId))
             ->when($partId, fn ($q) => $q->where('part_id', $partId))
             ->when($from, fn ($q) => $q->where('reported_at', '>=', $from))
@@ -258,8 +274,7 @@ class MaintenanceHistoryService
      */
     private function decisionRows(Branch $branch, ?int $equipmentId, ?int $partId, ?Carbon $from, ?Carbon $to): Collection
     {
-        $decisions = MaintenanceDecision::query()
-            ->whereHas('finding.equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+        $decisions = $this->whereEquipmentInBranch(MaintenanceDecision::query(), 'finding.equipment', $branch->id)
             ->when($equipmentId, fn ($q) => $q->whereHas('finding', fn ($q2) => $q2->where('equipment_id', $equipmentId)))
             ->when($partId, fn ($q) => $q->whereHas('finding', fn ($q2) => $q2->where('part_id', $partId)))
             ->when($from, fn ($q) => $q->where('decided_at', '>=', $from))
@@ -303,8 +318,7 @@ class MaintenanceHistoryService
         ?Carbon $to,
         ?MaintenanceHistoryEventType $eventType,
     ): Collection {
-        $requests = PartReplacementRequest::query()
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+        $requests = $this->whereEquipmentInBranch(PartReplacementRequest::query(), 'equipment', $branch->id)
             ->when($equipmentId, fn ($q) => $q->where('equipment_id', $equipmentId))
             ->when($partId, fn ($q) => $q->where('part_id', $partId))
             ->when($eventType, fn ($q) => $q->where('event_type', strtolower($eventType->value)))
@@ -376,8 +390,7 @@ class MaintenanceHistoryService
      */
     private function repairRows(Branch $branch, ?int $equipmentId, ?int $partId, ?Carbon $from, ?Carbon $to): Collection
     {
-        $repairs = PartRepair::query()
-            ->whereHas('partInstallation.equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+        $repairs = $this->whereEquipmentInBranch(PartRepair::query(), 'partInstallation.equipment', $branch->id)
             ->when($equipmentId, fn ($q) => $q->whereHas('partInstallation', fn ($q2) => $q2->where('equipment_id', $equipmentId)))
             ->when($partId, fn ($q) => $q->whereHas('partUnit', fn ($q2) => $q2->where('part_id', $partId)))
             ->when($from, fn ($q) => $q->where('removed_at', '>=', $from))

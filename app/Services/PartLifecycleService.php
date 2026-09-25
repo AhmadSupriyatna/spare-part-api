@@ -31,7 +31,11 @@ class PartLifecycleService
     public function install(Equipment $equipment, array $data, User $user): PartInstallation
     {
         return DB::transaction(function () use ($equipment, $data, $user) {
-            $currentRuntimeHours = $equipment->machine->line->runtime_hours;
+            // Phase 3B "Asset Outside Line": no Line means no runtime-hours
+            // source (out of scope to solve here) — 0 rather than a crash;
+            // Life Based/runtime lifetime tracking simply won't be
+            // meaningful for such an asset's parts yet.
+            $currentRuntimeHours = $equipment->machine?->line?->runtime_hours ?? 0;
             $pendingRepair = null;
 
             if (! empty($data['part_unit_id'])) {
@@ -190,7 +194,7 @@ class PartLifecycleService
         return DB::transaction(function () use ($installation) {
             $installation->update([
                 'removed_at' => now(),
-                'removed_at_runtime_hours' => $installation->equipment->machine->line->runtime_hours,
+                'removed_at_runtime_hours' => $installation->equipment->machine?->line?->runtime_hours ?? 0,
             ]);
 
             if ($installation->partUnit) {

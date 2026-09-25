@@ -77,7 +77,7 @@ class StoreReplacementRequestRequest extends FormRequest
 
             $branch = $this->route('branch');
             $equipment = Equipment::with('machine.line')->find($this->input('equipment_id'));
-            $equipmentBranchId = $equipment?->machine?->line?->branch_id;
+            $equipmentBranchId = $equipment?->resolvedBranchId();
 
             if (! $branch || $equipmentBranchId !== $branch->id) {
                 $validator->errors()->add(

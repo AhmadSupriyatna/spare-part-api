@@ -141,7 +141,13 @@ class PmSchedulingService
             ->where('is_active', true)
             ->where('schedule_type', 'calendar')
             ->whereIn('interval_days', [7, 30])
-            ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+            // Phase 3B "Asset Outside Line": a Task Library recipe on an
+            // outside-line asset has no equipment.machine.line to match
+            // through, so it also matches on the asset's own branch_id.
+            ->where(function ($q) use ($branch) {
+                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branch->id))
+                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branch->id));
+            })
             ->get();
 
         foreach ($libraries as $library) {
