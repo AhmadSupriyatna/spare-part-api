@@ -17,6 +17,7 @@ use App\Services\PartLifecycleService;
 use App\Services\PartLifetimeService;
 use App\Services\PmSchedulingService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PartInstallationController extends Controller
@@ -101,11 +102,11 @@ class PartInstallationController extends Controller
         return new PartInstallationResource($installation->load(['part', 'partUnit', 'installedBy']));
     }
 
-    public function remove(PartInstallation $partInstallation): PartInstallationResource
+    public function remove(Request $request, PartInstallation $partInstallation): PartInstallationResource
     {
-        $installation = $this->lifecycle->remove($partInstallation);
+        $installation = $this->lifecycle->remove($partInstallation, $request->user());
 
-        return new PartInstallationResource($installation->load(['part', 'partUnit', 'installedBy']));
+        return new PartInstallationResource($installation->load(['part', 'partUnit', 'installedBy', 'removedBy']));
     }
 
     public function update(

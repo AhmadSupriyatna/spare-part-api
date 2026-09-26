@@ -39,6 +39,7 @@ class PartRepairController extends Controller
             'partUnit.part',
             'partUnit.installations',
             'partInstallation.equipment.machine.line',
+            'partInstallation.removedBy',
         ]);
 
         if ($branchId) {
@@ -85,7 +86,10 @@ class PartRepairController extends Controller
         );
 
         return new PartRepairResource(
-            $repair->load(['partUnit.part', 'partUnit.installations', 'partInstallation.equipment.machine.line'])
+            $repair->load([
+                'partUnit.part', 'partUnit.installations',
+                'partInstallation.equipment.machine.line', 'partInstallation.removedBy',
+            ])
         );
     }
 

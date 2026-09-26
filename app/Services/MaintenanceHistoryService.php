@@ -395,7 +395,7 @@ class MaintenanceHistoryService
             ->when($partId, fn ($q) => $q->whereHas('partUnit', fn ($q2) => $q2->where('part_id', $partId)))
             ->when($from, fn ($q) => $q->where('removed_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('removed_at', '<=', $to))
-            ->with(['partUnit.part', 'partInstallation.equipment'])
+            ->with(['partUnit.part', 'partInstallation.equipment', 'partInstallation.removedBy'])
             ->latest('removed_at')
             ->limit(self::PER_SOURCE_LIMIT)
             ->get();
@@ -411,8 +411,7 @@ class MaintenanceHistoryService
             'title' => 'Part Repair',
             'description' => $repair->notes,
             'status' => $repair->disposition->value,
-            // No actor column exists on part_repairs — see PartRepair model.
-            'performed_by' => null,
+            'performed_by' => $repair->partInstallation?->removedBy?->name,
             'finding' => null,
             'decision' => null,
             'action' => null,

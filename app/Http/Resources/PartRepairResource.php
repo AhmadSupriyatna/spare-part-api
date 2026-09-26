@@ -37,6 +37,10 @@ class PartRepairResource extends JsonResource
                 'partInstallation',
                 fn () => $this->partInstallation?->equipment?->machine?->line?->name
             ),
+            'removed_by_name' => $this->whenLoaded(
+                'partInstallation',
+                fn () => $this->partInstallation?->removedBy?->name
+            ),
             'percent_used' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->percentUsed()),
             'total_runtime_hours_used' => $this->whenLoaded(
                 'partUnit',

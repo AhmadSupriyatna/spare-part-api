@@ -83,7 +83,7 @@ class PartReplacementService
 
             foreach ($oldInstallations as $oldInstallation) {
                 if ($oldInstallation) {
-                    $this->lifecycle->remove($oldInstallation);
+                    $this->lifecycle->remove($oldInstallation, $reviewer);
                 }
 
                 // Always a brand-new unit off the shelf — breakdown has no way

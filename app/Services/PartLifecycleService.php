@@ -188,13 +188,16 @@ class PartLifecycleService
      * every jalur keluar (manual "Lepas", breakdown replacement approval,
      * WO checklist replacement) funnels through here, so "Perlu Keputusan"
      * on the Repair Part board never needs a separate manual trigger.
+     * $user records who actually pulled it (nullable only for any caller
+     * that genuinely has no authenticated actor to attribute it to).
      */
-    public function remove(PartInstallation $installation): PartInstallation
+    public function remove(PartInstallation $installation, ?User $user = null): PartInstallation
     {
-        return DB::transaction(function () use ($installation) {
+        return DB::transaction(function () use ($installation, $user) {
             $installation->update([
                 'removed_at' => now(),
                 'removed_at_runtime_hours' => $installation->equipment->machine?->line?->runtime_hours ?? 0,
+                'removed_by' => $user?->id,
             ]);
 
             if ($installation->partUnit) {

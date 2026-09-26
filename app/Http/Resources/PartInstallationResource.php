@@ -43,6 +43,7 @@ class PartInstallationResource extends JsonResource
             'removed_at' => $this->removed_at,
             'removed_at_runtime_hours' => $this->removed_at_runtime_hours,
             'installed_by_name' => $this->whenLoaded('installedBy', fn () => $this->installedBy?->name),
+            'removed_by_name' => $this->whenLoaded('removedBy', fn () => $this->removedBy?->name),
             'notes' => $this->notes,
             'is_active' => $this->isActive(),
             'age_in_days' => $ageInDays,

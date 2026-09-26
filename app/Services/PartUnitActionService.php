@@ -90,7 +90,7 @@ class PartUnitActionService
                     throw new PartUnitNotInstalledException($unit->id);
                 }
 
-                $installation = $this->lifecycle->remove($installation);
+                $installation = $this->lifecycle->remove($installation, $reviewer);
                 $resultingInstallationId = $installation->id;
             } else {
                 if ($unit->status !== PartUnitStatus::Available) {

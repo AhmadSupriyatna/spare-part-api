@@ -245,7 +245,7 @@ class TaskService
                 $oldInstallation = $oldInstallationByCheckId[$check['id']] ?? null;
 
                 if ($oldInstallation) {
-                    $this->lifecycle->remove($oldInstallation);
+                    $this->lifecycle->remove($oldInstallation, $user);
                 }
 
                 $installation = $this->lifecycle->install($task->equipment, [

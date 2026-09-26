@@ -153,8 +153,25 @@ class PmSchedulingService
         foreach ($libraries as $library) {
             $dueDate = $this->nextRecurringDueDate($library);
 
+            // Bug fix: a task generated for this occurrence but since dragged
+            // to a different date (TaskController::reschedule()) must still
+            // count as "this period already has a task" — matching only on
+            // the CURRENT due_date meant the moved task no longer sat on its
+            // natural date, so the next page load saw the period as
+            // unscheduled and created a duplicate right back on that date,
+            // while the dragged one kept sitting on the new one. Every
+            // reschedule leaves a TaskReschedule row (previous_due_date =
+            // whatever the date was right before that specific move), so the
+            // task's very first reschedule row still points back to the
+            // natural occurrence date even after several subsequent moves.
             $exists = Task::where('task_library_id', $library->id)
-                ->whereDate('due_date', $dueDate->toDateString())
+                ->where(function ($q) use ($dueDate) {
+                    $q->whereDate('due_date', $dueDate->toDateString())
+                        ->orWhereHas(
+                            'reschedules',
+                            fn ($q2) => $q2->whereDate('previous_due_date', $dueDate->toDateString())
+                        );
+                })
                 ->exists();
 
             if (! $exists) {

@@ -21,6 +21,7 @@ class PartInstallation extends Model
         'removed_at',
         'removed_at_runtime_hours',
         'installed_by',
+        'removed_by',
         'notes',
     ];
 
@@ -52,6 +53,11 @@ class PartInstallation extends Model
     public function installedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'installed_by');
+    }
+
+    public function removedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'removed_by');
     }
 
     public function isActive(): bool

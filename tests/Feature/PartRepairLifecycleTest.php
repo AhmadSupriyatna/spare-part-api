@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\PartRepairDisposition;
 use App\Enums\PartReplacementStrategy;
 use App\Enums\PartUnitStatus;
+use App\Enums\UserRole;
 use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Machine;
@@ -13,11 +14,14 @@ use App\Models\ProductionLine;
 use App\Models\User;
 use App\Services\PartLifecycleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class PartRepairLifecycleTest extends TestCase
 {
     use RefreshDatabase;
+
+    private Branch $branch;
 
     private Equipment $equipment;
 
@@ -29,8 +33,8 @@ class PartRepairLifecycleTest extends TestCase
     {
         parent::setUp();
 
-        $branch = Branch::factory()->create();
-        $line = ProductionLine::factory()->create(['branch_id' => $branch->id, 'runtime_hours' => 500]);
+        $this->branch = Branch::factory()->create();
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'runtime_hours' => 500]);
         $machine = Machine::factory()->create(['line_id' => $line->id]);
         $this->equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
         $this->part = Part::factory()->create();
@@ -111,5 +115,37 @@ class PartRepairLifecycleTest extends TestCase
 
         $this->assertNull($installation->fresh()->partUnit->fresh()->percentUsed());
         $this->assertNull($installation->fresh()->partUnit->fresh()->remainingHours());
+    }
+
+    /** Repair Part history must be able to answer "oleh siapa" — nothing recorded this before. */
+    public function test_remove_records_who_removed_the_part(): void
+    {
+        $lifecycle = app(PartLifecycleService::class);
+        $remover = User::factory()->create();
+
+        $installation = $lifecycle->install($this->equipment, ['part_id' => $this->part->id], $this->user);
+        $lifecycle->remove($installation, $remover);
+
+        $this->assertSame($remover->id, $installation->fresh()->removed_by);
+    }
+
+    public function test_remove_via_the_api_records_the_authenticated_user(): void
+    {
+        foreach (UserRole::cases() as $role) {
+            Role::findOrCreate($role->value, 'web');
+        }
+        $admin = User::factory()->create();
+        $admin->assignRole(UserRole::AdminSparePart->value);
+        $admin->branches()->attach($this->branch->id);
+
+        $lifecycle = app(PartLifecycleService::class);
+        $installation = $lifecycle->install($this->equipment, ['part_id' => $this->part->id], $this->user);
+
+        $this->actingAs($admin)
+            ->postJson("/api/part-installations/{$installation->id}/remove")
+            ->assertOk()
+            ->assertJsonPath('data.removed_by_name', $admin->name);
+
+        $this->assertSame($admin->id, $installation->fresh()->removed_by);
     }
 }
