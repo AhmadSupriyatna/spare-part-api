@@ -9,7 +9,7 @@ use App\Http\Requests\AdjustStockRequest;
 use App\Http\Requests\ReceiveStockRequest;
 use App\Http\Requests\StorePartStockRequest;
 use App\Http\Requests\UpdatePartStockLocationRequest;
-use App\Http\Requests\UpdatePartStockSupplierRequest;
+use App\Http\Resources\PartReservationResource;
 use App\Http\Resources\PartStockResource;
 use App\Http\Resources\StockLedgerReportResource;
 use App\Http\Resources\StockLedgerResource;
@@ -240,6 +240,70 @@ class PartStockController extends Controller
     }
 
     /**
+     * Part Detail's "Reservasi PM" — the actual Tasks behind
+     * reserved_quantity (attachComputedAttributes() only ever summed them),
+     * so a planner can see WHICH upcoming WOs this stock is already spoken
+     * for by, not just how much. Same two independent sources, this time
+     * kept as one row per Task rather than summed.
+     *
+     * @return AnonymousResourceCollection<int, PartReservationResource>
+     */
+    public function reservations(PartStock $partStock): AnonymousResourceCollection
+    {
+        $openStatuses = [TaskStatus::Pending, TaskStatus::InProgress];
+
+        $direct = Task::query()
+            ->where('part_stock_id', $partStock->id)
+            ->whereIn('status', $openStatuses)
+            ->with('equipment.machine.line')
+            ->get()
+            ->map(fn (Task $task) => [
+                'task_id' => $task->id,
+                'title' => $task->title,
+                'due_date' => $task->due_date,
+                'equipment_name' => $task->equipment?->name,
+                'machine_name' => $task->equipment?->machine?->name,
+                'line_name' => $task->equipment?->machine?->line?->name,
+                'quantity' => $task->quantity_used ?? 1,
+            ]);
+
+        $checklist = TaskPartCheck::query()
+            ->where('part_id', $partStock->part_id)
+            ->whereHas('task', function ($q) use ($openStatuses, $partStock) {
+                $q->whereIn('status', $openStatuses)
+                    ->where(function ($q2) use ($partStock) {
+                        $q2->whereHas(
+                            'equipment.machine.line',
+                            fn ($q3) => $q3->where('branch_id', $partStock->branch_id)
+                        )->orWhereHas('equipment', fn ($q3) => $q3->where('branch_id', $partStock->branch_id));
+                    });
+            })
+            ->with('task.equipment.machine.line')
+            ->get()
+            ->groupBy('task_id')
+            ->map(function ($checks) {
+                $task = $checks->first()->task;
+
+                return [
+                    'task_id' => $task->id,
+                    'title' => $task->title,
+                    'due_date' => $task->due_date,
+                    'equipment_name' => $task->equipment?->name,
+                    'machine_name' => $task->equipment?->machine?->name,
+                    'line_name' => $task->equipment?->machine?->line?->name,
+                    'quantity' => $checks->count(),
+                ];
+            })
+            ->values();
+
+        $rows = $direct->concat($checklist)->sortBy([
+            fn ($row) => $row['due_date']?->toDateString() ?? '9999-99-99',
+        ])->values();
+
+        return PartReservationResource::collection($rows);
+    }
+
+    /**
      * Branch-wide in/out ledger report for the "Kelola Stok" ledger tab —
      * every movement (any part, any part_stock) in this branch, optionally
      * narrowed by date range and/or part, with each row resolved to the
@@ -295,20 +359,6 @@ class PartStockController extends Controller
      * Assign (or move) this part's stock to a rack/bin location.
      */
     public function updateLocation(UpdatePartStockLocationRequest $request, PartStock $partStock): PartStockResource
-    {
-        $partStock->update($request->validated());
-        $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
-        $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
-
-        return new PartStockResource($fresh);
-    }
-
-    /**
-     * Inventory Workspace's standalone "Pilih Supplier" — unlike receive(),
-     * this only ever changes which supplier this stock is sourced from,
-     * with no quantity/cost movement at all.
-     */
-    public function updateSupplier(UpdatePartStockSupplierRequest $request, PartStock $partStock): PartStockResource
     {
         $partStock->update($request->validated());
         $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
