@@ -15,6 +15,7 @@ use App\Http\Resources\StockLedgerReportResource;
 use App\Http\Resources\StockLedgerResource;
 use App\Models\Branch;
 use App\Models\Location;
+use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
 use App\Models\StockLedger;
@@ -36,7 +37,7 @@ class PartStockController extends Controller
     {
         $stocks = $branch->partStocks()->with(['part', 'supplier', 'location'])->get();
 
-        $this->attachReservedQuantities($stocks, $branch->id);
+        $this->attachComputedAttributes($stocks, $branch->id);
 
         return PartStockResource::collection($stocks);
     }
@@ -45,17 +46,22 @@ class PartStockController extends Controller
     {
         $partStock->load(['part', 'branch', 'supplier', 'location']);
 
-        $this->attachReservedQuantities(new Collection([$partStock]), $partStock->branch_id);
+        $this->attachComputedAttributes(new Collection([$partStock]), $partStock->branch_id);
 
         return new PartStockResource($partStock);
     }
 
     /**
-     * Inventory Workspace's "Qty Direserved" — how much of this stock is
-     * already spoken for by a not-yet-finished Task, so "available" reads
-     * honestly even when the shelf count hasn't dropped yet. Two sources,
-     * summed independently (never both for the same Task — see TaskService
-     * ::complete(), a checklist Task never also sets its own part_stock_id):
+     * Inventory Workspace's per-card numbers/badges — everything here is
+     * derived, never stored, and batched across the whole list (3 queries
+     * total) rather than one set of queries per row, since this runs on
+     * every Inventory Workspace page load.
+     *
+     * reserved_quantity: how much of this stock is already spoken for by a
+     * not-yet-finished Task, so "available" reads honestly even when the
+     * shelf count hasn't dropped yet. Two sources, summed independently
+     * (never both for the same Task — see TaskService::complete(), a
+     * checklist Task never also sets its own part_stock_id):
      *   - a plain Task with part_stock_id set directly (ad-hoc, or a
      *     WorkOrder-recurring occurrence pre-filled by generateNextTask())
      *     — quantity_used if confirmed, else 1 (planned but not yet
@@ -66,19 +72,30 @@ class PartStockController extends Controller
      *     counted per row rather than trusting is_replaced (that's null
      *     until the checklist is actually completed).
      *
-     * Batched across the whole list (2 queries total) rather than one
-     * query per row, since this runs on every "Kelola Stok"/Inventory
-     * Workspace page load.
+     * active_installation_count: how many of this branch's equipment
+     * currently have this part installed — the badge logic below compares
+     * against this instead of a manually-set minimum_stock, since "enough
+     * spares to cover every unit that could fail" is the actually relevant
+     * question for a spare-parts inventory (minimum_stock/reorder_point
+     * still exist and still drive StockAlertService's separate reorder-
+     * request automation — this replaces only the Kritis/Peringatan
+     * display badge, not that unrelated process).
      *
-     * @param  Collection<int, PartStock>  $stocks
+     * available_quantity = quantity_on_hand - reserved_quantity (never
+     * negative). is_critical: available < reserved (can't even cover
+     * what's already committed to open WOs). is_warning: available <
+     * active_installation_count (couldn't cover every installed unit
+     * failing at once) — checked only when not already critical, so a
+     * card shows at most one of the two.
      */
-    private function attachReservedQuantities(Collection $stocks, int $branchId): void
+    private function attachComputedAttributes(Collection $stocks, int $branchId): void
     {
         if ($stocks->isEmpty()) {
             return;
         }
 
         $openStatuses = [TaskStatus::Pending, TaskStatus::InProgress];
+        $partIds = $stocks->pluck('part_id')->unique();
 
         $direct = Task::query()
             ->whereIn('part_stock_id', $stocks->pluck('id'))
@@ -88,7 +105,7 @@ class PartStockController extends Controller
             ->pluck('qty', 'part_stock_id');
 
         $checklist = TaskPartCheck::query()
-            ->whereIn('part_id', $stocks->pluck('part_id')->unique())
+            ->whereIn('part_id', $partIds)
             ->whereHas('task', function ($q) use ($openStatuses, $branchId) {
                 $q->whereIn('status', $openStatuses)
                     ->where(function ($q2) use ($branchId) {
@@ -100,9 +117,29 @@ class PartStockController extends Controller
             ->groupBy('part_id')
             ->pluck('qty', 'part_id');
 
-        $stocks->each(function (PartStock $stock) use ($direct, $checklist) {
-            $qty = (int) ($direct[$stock->id] ?? 0) + (int) ($checklist[$stock->part_id] ?? 0);
-            $stock->setAttribute('reserved_quantity', $qty);
+        $installed = PartInstallation::query()
+            ->whereIn('part_id', $partIds)
+            ->whereNull('removed_at')
+            ->where(function ($q) use ($branchId) {
+                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branchId))
+                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branchId));
+            })
+            ->selectRaw('part_id, COUNT(*) as qty')
+            ->groupBy('part_id')
+            ->pluck('qty', 'part_id');
+
+        $stocks->each(function (PartStock $stock) use ($direct, $checklist, $installed) {
+            $reserved = (int) ($direct[$stock->id] ?? 0) + (int) ($checklist[$stock->part_id] ?? 0);
+            $installedCount = (int) ($installed[$stock->part_id] ?? 0);
+            $available = max(0, $stock->quantity_on_hand - $reserved);
+
+            $isCritical = $stock->quantity_on_hand < $reserved;
+
+            $stock->setAttribute('reserved_quantity', $reserved);
+            $stock->setAttribute('active_installation_count', $installedCount);
+            $stock->setAttribute('available_quantity', $available);
+            $stock->setAttribute('is_critical', $isCritical);
+            $stock->setAttribute('is_warning', ! $isCritical && $available < $installedCount);
         });
     }
 
@@ -115,10 +152,10 @@ class PartStockController extends Controller
     public function receive(ReceiveStockRequest $request, PartStock $partStock): JsonResponse
     {
         $this->recordReceiving($partStock, $request->validated(), $request->user());
+        $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
+        $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
 
-        return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
-            ->response()
-            ->setStatusCode(200);
+        return (new PartStockResource($fresh))->response()->setStatusCode(200);
     }
 
     /**
@@ -139,10 +176,10 @@ class PartStockController extends Controller
         ]);
 
         $this->recordReceiving($partStock, $data, $request->user());
+        $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
+        $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
 
-        return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
-            ->response()
-            ->setStatusCode(201);
+        return (new PartStockResource($fresh))->response()->setStatusCode(201);
     }
 
     /**
@@ -189,9 +226,10 @@ class PartStockController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return (new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location'])))
-            ->response()
-            ->setStatusCode(200);
+        $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
+        $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
+
+        return (new PartStockResource($fresh))->response()->setStatusCode(200);
     }
 
     public function ledger(PartStock $partStock): AnonymousResourceCollection
@@ -259,8 +297,10 @@ class PartStockController extends Controller
     public function updateLocation(UpdatePartStockLocationRequest $request, PartStock $partStock): PartStockResource
     {
         $partStock->update($request->validated());
+        $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
+        $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
 
-        return new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location']));
+        return new PartStockResource($fresh);
     }
 
     /**
@@ -271,8 +311,10 @@ class PartStockController extends Controller
     public function updateSupplier(UpdatePartStockSupplierRequest $request, PartStock $partStock): PartStockResource
     {
         $partStock->update($request->validated());
+        $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
+        $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
 
-        return new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location']));
+        return new PartStockResource($fresh);
     }
 
     /**
@@ -280,8 +322,9 @@ class PartStockController extends Controller
      */
     public function forLocation(Location $location): AnonymousResourceCollection
     {
-        return PartStockResource::collection(
-            $location->partStocks()->with('part')->get()
-        );
+        $stocks = $location->partStocks()->with('part')->get();
+        $this->attachComputedAttributes($stocks, $location->branch_id);
+
+        return PartStockResource::collection($stocks);
     }
 }

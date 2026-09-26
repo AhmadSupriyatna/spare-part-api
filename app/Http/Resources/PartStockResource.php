@@ -34,8 +34,10 @@ class PartStockResource extends JsonResource
             'unit_cost' => $this->unit_cost,
             'quantity_on_hand' => $this->quantity_on_hand,
             'reserved_quantity' => $this->reserved_quantity ?? 0,
-            'is_below_reorder_point' => $this->isBelowReorderPoint(),
-            'is_critical' => $this->isCritical(),
+            'available_quantity' => $this->available_quantity ?? $this->quantity_on_hand,
+            'active_installation_count' => $this->active_installation_count ?? 0,
+            'is_critical' => $this->is_critical ?? false,
+            'is_warning' => $this->is_warning ?? false,
         ];
     }
 }

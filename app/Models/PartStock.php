@@ -68,14 +68,4 @@ class PartStock extends Model
     {
         return $this->hasMany(ReorderRequest::class);
     }
-
-    public function isBelowReorderPoint(): bool
-    {
-        return $this->quantity_on_hand <= $this->reorder_point;
-    }
-
-    public function isCritical(): bool
-    {
-        return $this->quantity_on_hand <= $this->minimum_stock;
-    }
 }
