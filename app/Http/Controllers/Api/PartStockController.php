@@ -304,6 +304,99 @@ class PartStockController extends Controller
     }
 
     /**
+     * Part Detail's info-card dashboard — everything bundled into one
+     * response instead of four separate round-trips, since the whole point
+     * of the redesign is a single scrollable page with no tab navigation.
+     *
+     * - monthly_usage: 12 months back including the current one, from
+     *   StockLedger TYPE_ISSUE rows on this stock (grouped in PHP by
+     *   Carbon::format('Y-m') rather than a DB date-group function, for
+     *   the same SQLite/Postgres parity reason every other place in this
+     *   app avoids raw SQL date grouping).
+     * - line_machine_heatmap: currently-active installations of this part
+     *   in this branch, grouped by (line, machine) — "where is it running
+     *   right now", not a full historical count.
+     * - failure_breakdown_count: PartReplacementRequest rows for this part
+     *   in this branch whose event_type is Failure or Breakdown (never
+     *   Maintenance, which is a planned/reviewed replacement, not one of
+     *   the two operational-failure kinds asked for here).
+     * - average_lifetime_hours: mean of PartInstallation::ageInRuntimeHours()
+     *   across every installation (active or removed) of this part in this
+     *   branch — the actually-achieved figure, not the Part's own static
+     *   estimated_lifetime_hours rating.
+     */
+    public function analytics(PartStock $partStock): JsonResponse
+    {
+        $branchId = $partStock->branch_id;
+
+        $months = collect(range(0, 11))->map(fn ($i) => now()->subMonths($i)->format('Y-m'))->reverse()->values();
+        $usageByMonth = StockLedger::query()
+            ->where('part_stock_id', $partStock->id)
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->where('occurred_at', '>=', now()->subMonths(11)->startOfMonth())
+            ->get(['occurred_at', 'quantity_change'])
+            ->groupBy(fn (StockLedger $entry) => $entry->occurred_at->format('Y-m'))
+            ->map(fn ($entries) => (int) $entries->sum(fn (StockLedger $entry) => abs($entry->quantity_change)));
+
+        $monthlyUsage = $months->map(fn ($month) => [
+            'month' => $month,
+            'quantity' => (int) ($usageByMonth[$month] ?? 0),
+        ])->values();
+
+        $activeInstallations = PartInstallation::query()
+            ->where('part_id', $partStock->part_id)
+            ->whereNull('removed_at')
+            ->where(function ($q) use ($branchId) {
+                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branchId))
+                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branchId));
+            })
+            ->with('equipment.machine.line')
+            ->get();
+
+        $heatmap = $activeInstallations
+            ->groupBy(fn (PartInstallation $installation) => ($installation->equipment->machine?->line?->name ?? 'Luar Line').'|'.($installation->equipment->machine?->name ?? '-'))
+            ->map(function ($group) {
+                $first = $group->first();
+
+                return [
+                    'line_name' => $first->equipment->machine?->line?->name ?? 'Luar Line',
+                    'machine_name' => $first->equipment->machine?->name ?? '-',
+                    'count' => $group->count(),
+                ];
+            })
+            ->values();
+
+        $failureBreakdownCount = PartReplacementRequest::query()
+            ->where('part_id', $partStock->part_id)
+            ->whereIn('event_type', ['failure', 'breakdown'])
+            ->where(function ($q) use ($branchId) {
+                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branchId))
+                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branchId));
+            })
+            ->count();
+
+        $allInstallations = PartInstallation::query()
+            ->where('part_id', $partStock->part_id)
+            ->where(function ($q) use ($branchId) {
+                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branchId))
+                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branchId));
+            })
+            ->with('equipment.machine.line')
+            ->get();
+
+        $lifetimeHours = $allInstallations->map(fn (PartInstallation $installation) => $installation->ageInRuntimeHours())
+            ->filter(fn ($hours) => $hours !== null);
+
+        return response()->json(['data' => [
+            'monthly_usage' => $monthlyUsage,
+            'line_machine_heatmap' => $heatmap,
+            'failure_breakdown_count' => $failureBreakdownCount,
+            'average_lifetime_hours' => $lifetimeHours->isEmpty() ? null : (int) round($lifetimeHours->avg()),
+            'installations_sampled' => $allInstallations->count(),
+        ]]);
+    }
+
+    /**
      * Branch-wide in/out ledger report for the "Kelola Stok" ledger tab —
      * every movement (any part, any part_stock) in this branch, optionally
      * narrowed by date range and/or part, with each row resolved to the
