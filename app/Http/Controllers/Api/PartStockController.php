@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TaskStatus;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AdjustStockRequest;
 use App\Http\Requests\ReceiveStockRequest;
 use App\Http\Requests\StorePartStockRequest;
 use App\Http\Requests\UpdatePartStockLocationRequest;
+use App\Http\Requests\UpdatePartStockSupplierRequest;
 use App\Http\Resources\PartStockResource;
 use App\Http\Resources\StockLedgerReportResource;
 use App\Http\Resources\StockLedgerResource;
@@ -17,8 +19,10 @@ use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
+use App\Models\TaskPartCheck;
 use App\Models\User;
 use App\Services\StockMovementService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -30,14 +34,76 @@ class PartStockController extends Controller
 
     public function index(Branch $branch): AnonymousResourceCollection
     {
-        return PartStockResource::collection(
-            $branch->partStocks()->with(['part', 'supplier', 'location'])->get()
-        );
+        $stocks = $branch->partStocks()->with(['part', 'supplier', 'location'])->get();
+
+        $this->attachReservedQuantities($stocks, $branch->id);
+
+        return PartStockResource::collection($stocks);
     }
 
     public function show(PartStock $partStock): PartStockResource
     {
-        return new PartStockResource($partStock->load(['part', 'branch', 'supplier', 'location']));
+        $partStock->load(['part', 'branch', 'supplier', 'location']);
+
+        $this->attachReservedQuantities(new Collection([$partStock]), $partStock->branch_id);
+
+        return new PartStockResource($partStock);
+    }
+
+    /**
+     * Inventory Workspace's "Qty Direserved" — how much of this stock is
+     * already spoken for by a not-yet-finished Task, so "available" reads
+     * honestly even when the shelf count hasn't dropped yet. Two sources,
+     * summed independently (never both for the same Task — see TaskService
+     * ::complete(), a checklist Task never also sets its own part_stock_id):
+     *   - a plain Task with part_stock_id set directly (ad-hoc, or a
+     *     WorkOrder-recurring occurrence pre-filled by generateNextTask())
+     *     — quantity_used if confirmed, else 1 (planned but not yet
+     *     confirmed still reserves at least one unit).
+     *   - a Task Library/Part Lifetime checklist row (TaskPartCheck) for
+     *     this part, on a Task still Pending/InProgress in this branch —
+     *     always quantity_planned=1 per row (see PmSchedulingService),
+     *     counted per row rather than trusting is_replaced (that's null
+     *     until the checklist is actually completed).
+     *
+     * Batched across the whole list (2 queries total) rather than one
+     * query per row, since this runs on every "Kelola Stok"/Inventory
+     * Workspace page load.
+     *
+     * @param  Collection<int, PartStock>  $stocks
+     */
+    private function attachReservedQuantities(Collection $stocks, int $branchId): void
+    {
+        if ($stocks->isEmpty()) {
+            return;
+        }
+
+        $openStatuses = [TaskStatus::Pending, TaskStatus::InProgress];
+
+        $direct = Task::query()
+            ->whereIn('part_stock_id', $stocks->pluck('id'))
+            ->whereIn('status', $openStatuses)
+            ->selectRaw('part_stock_id, SUM(COALESCE(quantity_used, 1)) as qty')
+            ->groupBy('part_stock_id')
+            ->pluck('qty', 'part_stock_id');
+
+        $checklist = TaskPartCheck::query()
+            ->whereIn('part_id', $stocks->pluck('part_id')->unique())
+            ->whereHas('task', function ($q) use ($openStatuses, $branchId) {
+                $q->whereIn('status', $openStatuses)
+                    ->where(function ($q2) use ($branchId) {
+                        $q2->whereHas('equipment.machine.line', fn ($q3) => $q3->where('branch_id', $branchId))
+                            ->orWhereHas('equipment', fn ($q3) => $q3->where('branch_id', $branchId));
+                    });
+            })
+            ->selectRaw('part_id, COUNT(*) as qty')
+            ->groupBy('part_id')
+            ->pluck('qty', 'part_id');
+
+        $stocks->each(function (PartStock $stock) use ($direct, $checklist) {
+            $qty = (int) ($direct[$stock->id] ?? 0) + (int) ($checklist[$stock->part_id] ?? 0);
+            $stock->setAttribute('reserved_quantity', $qty);
+        });
     }
 
     /**
@@ -191,6 +257,18 @@ class PartStockController extends Controller
      * Assign (or move) this part's stock to a rack/bin location.
      */
     public function updateLocation(UpdatePartStockLocationRequest $request, PartStock $partStock): PartStockResource
+    {
+        $partStock->update($request->validated());
+
+        return new PartStockResource($partStock->fresh(['part', 'branch', 'supplier', 'location']));
+    }
+
+    /**
+     * Inventory Workspace's standalone "Pilih Supplier" — unlike receive(),
+     * this only ever changes which supplier this stock is sourced from,
+     * with no quantity/cost movement at all.
+     */
+    public function updateSupplier(UpdatePartStockSupplierRequest $request, PartStock $partStock): PartStockResource
     {
         $partStock->update($request->validated());
 

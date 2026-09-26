@@ -25,6 +25,7 @@ class PartStockResource extends JsonResource
             'branch_id' => $this->branch_id,
             'branch_name' => $this->whenLoaded('branch', fn () => $this->branch->name),
             'supplier_id' => $this->supplier_id,
+            'supplier_name' => $this->whenLoaded('supplier', fn () => $this->supplier?->name),
             'location_id' => $this->location_id,
             'location_code' => $this->whenLoaded('location', fn () => $this->location?->code),
             'minimum_stock' => $this->minimum_stock,
@@ -32,6 +33,7 @@ class PartStockResource extends JsonResource
             'reorder_quantity' => $this->reorder_quantity,
             'unit_cost' => $this->unit_cost,
             'quantity_on_hand' => $this->quantity_on_hand,
+            'reserved_quantity' => $this->reserved_quantity ?? 0,
             'is_below_reorder_point' => $this->isBelowReorderPoint(),
             'is_critical' => $this->isCritical(),
         ];

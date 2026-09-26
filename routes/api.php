@@ -172,6 +172,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])
             ->middleware('throttle:stock-adjustment');
         Route::put('/part-stocks/{partStock}/location', [PartStockController::class, 'updateLocation']);
+        Route::put('/part-stocks/{partStock}/supplier', [PartStockController::class, 'updateSupplier']);
 
         Route::post('/branches/{branch}/lines', [LineController::class, 'store']);
         Route::put('/lines/{line}', [LineController::class, 'update']);
