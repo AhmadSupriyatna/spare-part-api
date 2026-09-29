@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\PartSupplierController;
 use App\Http\Controllers\Api\PartUnitActionRequestController;
 use App\Http\Controllers\Api\PartUnitController;
 use App\Http\Controllers\Api\PublicBreakdownController;
+use App\Http\Controllers\Api\PublicMachineMonitoringController;
 use App\Http\Controllers\Api\PublicPartUnitController;
 use App\Http\Controllers\Api\RackController;
 use App\Http\Controllers\Api\RackLevelController;
@@ -55,6 +56,10 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
     // picker, since a unit's part_id feeds the same BOM-filtered endpoint.
     Route::get('/part-units/{partUnit}', [PublicPartUnitController::class, 'show']);
     Route::post('/part-units/{partUnit}/action-requests', [PublicPartUnitController::class, 'store']);
+
+    // QR-per-machine "Monitoring Life Time Mesin" flow: read-only, no
+    // submission — see PublicMachineMonitoringController's own docblock.
+    Route::get('/machines/{machine}/monitoring', [PublicMachineMonitoringController::class, 'show']);
 });
 
 // branch.access is a no-op for Superadmin/Supervisor and for any route whose
