@@ -167,6 +167,19 @@ class Equipment extends Model
         return $this->hasMany(PartInstallation::class);
     }
 
+    /**
+     * How many units of this part are currently (actively) installed on
+     * this equipment — Task Library's checklist quantity is always this
+     * number, never a manually-typed one (see TaskLibraryPartController and
+     * TaskLibraryController::store()): a PM checklist should always cover
+     * every installed unit of a part, not some arbitrary count a user might
+     * mistype.
+     */
+    public function activeInstallationCountForPart(int $partId): int
+    {
+        return $this->partInstallations()->where('part_id', $partId)->whereNull('removed_at')->count();
+    }
+
     public function replacementRequests(): HasMany
     {
         return $this->hasMany(PartReplacementRequest::class);

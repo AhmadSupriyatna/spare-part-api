@@ -6,6 +6,12 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+/**
+ * No `quantity_required` here on purpose — it's always the part's current
+ * active-installation count on this equipment
+ * (Equipment::activeInstallationCountForPart()), computed server-side in
+ * TaskLibraryPartController::store(), never a client-supplied number.
+ */
 class StoreTaskLibraryPartRequest extends FormRequest
 {
     public function authorize(): bool
@@ -29,7 +35,6 @@ class StoreTaskLibraryPartRequest extends FormRequest
                 Rule::unique('task_library_parts', 'part_id')
                     ->where('task_library_id', $this->route('taskLibrary')?->id),
             ],
-            'quantity_required' => ['sometimes', 'integer', 'min:1'],
             'notes' => ['nullable', 'string'],
         ];
     }

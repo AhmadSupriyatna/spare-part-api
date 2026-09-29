@@ -71,7 +71,7 @@ class TaskLibraryController extends Controller
             foreach ($partsData as $partData) {
                 $library->parts()->create([
                     'part_id' => $partData['part_id'],
-                    'quantity_required' => $partData['quantity_required'] ?? 1,
+                    'quantity_required' => $equipment->activeInstallationCountForPart($partData['part_id']),
                 ]);
             }
 

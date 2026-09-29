@@ -31,6 +31,10 @@ class StoreTaskLibraryRequest extends FormRequest
             'interval_hours' => ['nullable', 'integer', 'min:1', 'required_if:schedule_type,runtime'],
             'estimated_duration_minutes' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['sometimes', 'boolean'],
+            // No parts.*.quantity_required here on purpose — same reasoning
+            // as StoreTaskLibraryPartRequest: it's always the part's active-
+            // installation count, computed server-side in
+            // TaskLibraryController::store(), never client-supplied.
             'parts' => ['nullable', 'array'],
             'parts.*.part_id' => [
                 'required',
@@ -39,7 +43,6 @@ class StoreTaskLibraryRequest extends FormRequest
                     fn ($q) => $q->where('equipment_id', $this->route('equipment')?->id)->whereNull('removed_at')
                 ),
             ],
-            'parts.*.quantity_required' => ['sometimes', 'integer', 'min:1'],
         ];
     }
 }

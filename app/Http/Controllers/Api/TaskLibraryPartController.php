@@ -13,7 +13,10 @@ class TaskLibraryPartController extends Controller
 {
     public function store(StoreTaskLibraryPartRequest $request, TaskLibrary $taskLibrary): TaskLibraryPartResource
     {
-        $part = $taskLibrary->parts()->create($request->validated());
+        $data = $request->validated();
+        $data['quantity_required'] = $taskLibrary->equipment->activeInstallationCountForPart($data['part_id']);
+
+        $part = $taskLibrary->parts()->create($data);
 
         return new TaskLibraryPartResource($part->load('part'));
     }
