@@ -97,10 +97,6 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::get('/branches/{branch}/stock-alerts', [StockAlertController::class, 'index']);
     Route::get('/branches/{branch}/reorder-requests', [ReorderRequestController::class, 'index']);
 
-    // Dashboard chart data (failure trend, cost heatmap, budget projection):
-    // any authenticated role can view.
-    Route::get('/branches/{branch}/dashboard-analytics', [DashboardAnalyticsController::class, 'show']);
-
     // Line > Machine > Equipment hierarchy: any authenticated role can read.
     Route::get('/branches/{branch}/lines', [LineController::class, 'index']);
     Route::get('/lines/{line}', [LineController::class, 'show']);
@@ -260,6 +256,10 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::post('/branches/{branch}/budgets', [BudgetController::class, 'store']);
         Route::put('/budgets/{budget}', [BudgetController::class, 'update']);
         Route::delete('/budgets/{budget}', [BudgetController::class, 'destroy']);
+
+        // Same finance-concern gate as Budget above — the dashboard's cost
+        // heatmap and budget projection chart data live here too.
+        Route::get('/branches/{branch}/dashboard-analytics', [DashboardAnalyticsController::class, 'show']);
 
         Route::get('/branches/{branch}/activity-log', [ActivityLogController::class, 'index']);
     });

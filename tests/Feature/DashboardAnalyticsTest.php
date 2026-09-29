@@ -48,6 +48,17 @@ class DashboardAnalyticsTest extends TestCase
         $this->admin->branches()->attach($this->branch->id);
     }
 
+    public function test_engineer_cannot_view_dashboard_analytics(): void
+    {
+        $engineer = User::factory()->create();
+        $engineer->assignRole(UserRole::Engineer->value);
+        $engineer->branches()->attach($this->branch->id);
+
+        $this->actingAs($engineer)
+            ->getJson("/api/branches/{$this->branch->id}/dashboard-analytics")
+            ->assertForbidden();
+    }
+
     private function fetchAnalytics(): TestResponse
     {
         return $this->actingAs($this->admin)->getJson("/api/branches/{$this->branch->id}/dashboard-analytics");

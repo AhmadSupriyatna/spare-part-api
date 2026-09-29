@@ -23,6 +23,10 @@ use Illuminate\Support\Collection;
  * those are already fetched elsewhere (Kelola Stok's part-stocks list, the
  * Reorder Requests page) and the dashboard just reuses that same data
  * client-side, so there is exactly one source of truth for each.
+ *
+ * Gated the same as Budget (admin_spare_part|supervisor|superadmin, see
+ * routes/api.php) — cost heatmap and budget projection are the same
+ * planning/finance concern Budget already restricts from Engineer.
  */
 class DashboardAnalyticsController extends Controller
 {
