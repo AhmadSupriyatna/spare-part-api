@@ -47,7 +47,12 @@ class PublicMachineMonitoringController extends Controller
             ->with(['equipment', 'part', 'partUnit'])
             ->get();
 
-        $months = collect(range(0, 11))->map(fn ($i) => now()->subMonths($i)->format('Y-m'))->reverse()->values();
+        // startOfMonth() before subMonths() — anchoring on day 1 avoids
+        // Carbon overflowing past a shorter month (e.g. Aug 31 minus a
+        // month landing on "Jul 31", or a day-29-31 date subtracted onto a
+        // non-leap February), which would otherwise skip a month and
+        // duplicate another in the resulting Y-m list.
+        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
         $failuresByMonth = PartReplacementRequest::query()
             ->whereIn('equipment_id', $equipmentIds)
             ->whereIn('event_type', ['failure', 'breakdown'])

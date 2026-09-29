@@ -329,7 +329,11 @@ class PartStockController extends Controller
     {
         $branchId = $partStock->branch_id;
 
-        $months = collect(range(0, 11))->map(fn ($i) => now()->subMonths($i)->format('Y-m'))->reverse()->values();
+        // startOfMonth() before subMonths() — anchoring on day 1 avoids
+        // Carbon overflowing past a shorter month (e.g. a day-29-31 date
+        // subtracted onto a non-leap February), which would otherwise skip
+        // a month and duplicate another in the resulting Y-m list.
+        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
         $usageByMonth = StockLedger::query()
             ->where('part_stock_id', $partStock->id)
             ->where('type', StockLedger::TYPE_ISSUE)
