@@ -70,11 +70,13 @@ class Equipment extends Model
      * Phase 3B "Asset Outside Line" — the one place branch resolution for
      * an Equipment should happen from now on, instead of every caller
      * walking machine->line->branch_id itself (which crashes outright for
-     * an outside-line asset, since it has no machine at all).
+     * an outside-line asset, since it has no machine at all). Delegates to
+     * Machine::resolvedBranchId() rather than assuming machine->line, since
+     * the Machine itself may now be an outside-line one ("Mesin Luar Line").
      */
     public function resolvedBranchId(): ?int
     {
-        return $this->branch_id ?? $this->machine?->line?->branch_id;
+        return $this->branch_id ?? $this->machine?->resolvedBranchId();
     }
 
     /**
@@ -90,11 +92,19 @@ class Equipment extends Model
      * line/machine to compose from, and this prefix is deliberately a
      * different shape (not a 3rd "-"-joined segment standing in for a fake
      * line/machine) so it's never mistaken for one.
+     *
+     * {machine.code}-{code} (2 segments, no OL- prefix) for equipment under
+     * an outside-line Machine ("Mesin Luar Line") — it does have a real
+     * Machine, just no Line above it to compose a 3rd segment from.
      */
     public function hierarchicalCode(): string
     {
         if ($this->machine_id === null) {
             return "OL-{$this->code}";
+        }
+
+        if ($this->machine->line_id === null) {
+            return "{$this->machine->code}-{$this->code}";
         }
 
         return "{$this->machine->line->code}-{$this->machine->code}-{$this->code}";

@@ -62,6 +62,12 @@ class Branch extends Model
         return $this->hasMany(Equipment::class);
     }
 
+    /** Only outside-line machines ("Mesin Luar Line") — production Machine is reached via lines()->machines(). */
+    public function machines(): HasMany
+    {
+        return $this->hasMany(Machine::class);
+    }
+
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class);

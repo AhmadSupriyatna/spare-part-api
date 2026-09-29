@@ -40,7 +40,9 @@ class BranchScopeResolver
             $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack, $model instanceof Budget => $model->branch_id,
             $model instanceof RackLevel => $model->rack->branch_id,
             $model instanceof PartUnitActionRequest => $model->branch_id,
-            $model instanceof Machine => $model->line->branch_id,
+            // "Mesin Luar Line": a Machine may now resolve its branch via
+            // its own branch_id (outside-line) instead of always line->branch_id.
+            $model instanceof Machine => $model->resolvedBranchId(),
             // Phase 3B "Asset Outside Line": Equipment::resolvedBranchId()
             // handles both production (via machine->line) and an
             // outside-line asset (its own branch_id) — this is the

@@ -101,6 +101,8 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::get('/equipment/{equipment}', [EquipmentController::class, 'show']);
     // Phase 3B "Asset Outside Line" — an asset with no Line/Machine at all.
     Route::get('/branches/{branch}/equipment', [EquipmentController::class, 'indexOutsideLine']);
+    // "Mesin Luar Line" — a Machine with no production Line at all.
+    Route::get('/branches/{branch}/machines', [MachineController::class, 'indexOutsideLine']);
 
     // Work orders (maintenance schedule templates) and tasks (actual work items):
     // any authenticated role can read.
@@ -187,6 +189,8 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         // Phase 3B "Asset Outside Line" — same role slice as the
         // machine-scoped Equipment CRUD above.
         Route::post('/branches/{branch}/equipment', [EquipmentController::class, 'storeOutsideLine']);
+        // "Mesin Luar Line" — same role slice as the line-scoped Machine CRUD above.
+        Route::post('/branches/{branch}/machines', [MachineController::class, 'storeOutsideLine']);
 
         Route::post('/equipment/{equipment}/work-orders', [WorkOrderController::class, 'store']);
         Route::put('/work-orders/{workOrder}', [WorkOrderController::class, 'update']);
