@@ -15,16 +15,21 @@ class BudgetForecastService
     private const WEEKS_PER_YEAR = 52;
 
     /**
-     * Phase 3B "Asset Outside Line": matches an already-built
-     * PartInstallation query to a branch — production via
-     * equipment.machine.line.branch_id (unchanged), an outside-line
-     * installation via its own equipment.branch_id directly.
+     * Matches an already-built PartInstallation query to a branch — three
+     * ways an equipment can resolve to one, mirroring
+     * Equipment::resolvedBranchId(): production via
+     * equipment.machine.line.branch_id, under an outside-line Machine via
+     * equipment.machine.branch_id ("Mesin Luar Line"), or a fully
+     * standalone asset via its own equipment.branch_id directly.
      */
     private function whereEquipmentInBranch(Builder $query, int $branchId): Builder
     {
-        return $query->where(function (Builder $q) use ($branchId) {
-            $q->whereHas('equipment.machine.line', fn (Builder $q2) => $q2->where('branch_id', $branchId))
-                ->orWhereHas('equipment', fn (Builder $q2) => $q2->where('branch_id', $branchId));
+        return $query->whereHas('equipment', function (Builder $q) use ($branchId) {
+            $q->where('branch_id', $branchId)
+                ->orWhereHas('machine', function (Builder $q2) use ($branchId) {
+                    $q2->where('branch_id', $branchId)
+                        ->orWhereHas('line', fn (Builder $q3) => $q3->where('branch_id', $branchId));
+                });
         });
     }
 

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\CompanySettingController;
+use App\Http\Controllers\Api\DashboardAnalyticsController;
 use App\Http\Controllers\Api\DatabaseBackupController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\LineController;
@@ -95,6 +96,10 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     // any authenticated role can view them.
     Route::get('/branches/{branch}/stock-alerts', [StockAlertController::class, 'index']);
     Route::get('/branches/{branch}/reorder-requests', [ReorderRequestController::class, 'index']);
+
+    // Dashboard chart data (failure trend, cost heatmap, budget projection):
+    // any authenticated role can view.
+    Route::get('/branches/{branch}/dashboard-analytics', [DashboardAnalyticsController::class, 'show']);
 
     // Line > Machine > Equipment hierarchy: any authenticated role can read.
     Route::get('/branches/{branch}/lines', [LineController::class, 'index']);

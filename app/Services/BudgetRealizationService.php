@@ -66,4 +66,34 @@ class BudgetRealizationService
             'unpriced_transactions' => $unpricedTransactions,
         ];
     }
+
+    /**
+     * Actual spend for a whole branch/year, every replacement strategy
+     * combined, bucketed by month — the "Realisasi" line in the dashboard's
+     * budget projection chart. Same TYPE_ISSUE + unit_cost-snapshot rule as
+     * calculateRealization(), just grouped by month instead of split
+     * planned/unplanned.
+     *
+     * @return array<string, string> month ("Y-m") => cost, only for months with at least one priced issue
+     */
+    public function monthlyRealization(Branch $branch, int $year): array
+    {
+        $start = Carbon::create($year, 1, 1)->startOfYear();
+        $end = Carbon::create($year, 1, 1)->endOfYear();
+
+        $entries = StockLedger::query()
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->whereBetween('occurred_at', [$start, $end])
+            ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereNotNull('unit_cost')
+            ->get(['occurred_at', 'quantity_change', 'unit_cost']);
+
+        return $entries
+            ->groupBy(fn (StockLedger $entry) => $entry->occurred_at->format('Y-m'))
+            ->map(fn ($group) => $group->reduce(
+                fn (string $carry, StockLedger $entry) => bcadd($carry, bcmul((string) $entry->unit_cost, (string) abs($entry->quantity_change), 2), 2),
+                '0.00'
+            ))
+            ->all();
+    }
 }
