@@ -9,9 +9,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * One Bin — the leaf of the Rak > Tingkat > Bin hierarchy. `code` is
- * always server-generated ("{rack.label}{level_number}-B{bin_number}",
- * e.g. "A1-B1") at creation time, never accepted from a request.
+ * One Bin — the leaf of the Rak > Tingkat > Bin hierarchy. `code` defaults
+ * to a server-generated value ("{rack.label}{level_number}-B{bin_number}",
+ * e.g. "A1-B1") but can be overridden with a free-form value from the
+ * request (see LocationController::store()/update()) — validated unique
+ * per branch, not globally, since two branches may reasonably reuse the
+ * same short code.
  */
 class Location extends Model
 {

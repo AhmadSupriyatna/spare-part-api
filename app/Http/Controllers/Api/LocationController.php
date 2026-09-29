@@ -30,12 +30,13 @@ class LocationController extends Controller
     public function store(StoreLocationRequest $request, RackLevel $rackLevel): LocationResource
     {
         $binNumber = Location::nextBinNumber($rackLevel->id);
+        $data = $request->validated();
 
         $location = $rackLevel->locations()->create([
             'branch_id' => $rackLevel->rack->branch_id,
             'bin_number' => $binNumber,
-            'code' => Location::generateCode($rackLevel, $binNumber),
-            'description' => $request->validated()['description'] ?? null,
+            'code' => $data['code'] ?? Location::generateCode($rackLevel, $binNumber),
+            'description' => $data['description'] ?? null,
             'is_active' => true,
         ]);
 
