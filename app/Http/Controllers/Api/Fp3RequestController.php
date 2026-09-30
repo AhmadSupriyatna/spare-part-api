@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelFp3RequestRequest;
 use App\Http\Requests\CompleteFp3RequestRequest;
 use App\Http\Requests\ReceiveFp3RequestRequest;
+use App\Http\Requests\ScheduleFp3RequestRequest;
 use App\Http\Resources\Fp3RequestResource;
 use App\Models\Branch;
 use App\Models\Fp3Request;
@@ -41,6 +42,19 @@ class Fp3RequestController extends Controller
         $this->ensureCanWork($request, $fp3Request);
 
         $updated = $this->fp3Requests->receive($fp3Request, $request->validated()['due_date'] ?? null);
+
+        return new Fp3RequestResource($updated);
+    }
+
+    /**
+     * due_date only, no claim — the PM Calendar's "drag an unscheduled FP3
+     * card onto a day" action. Deliberately doesn't go through
+     * ensureCanWork(): scheduling is a planning action like
+     * TaskLibraryController::schedule(), not claiming work.
+     */
+    public function schedule(ScheduleFp3RequestRequest $request, Fp3Request $fp3Request): Fp3RequestResource
+    {
+        $updated = $this->fp3Requests->schedule($fp3Request, $request->validated()['due_date']);
 
         return new Fp3RequestResource($updated);
     }

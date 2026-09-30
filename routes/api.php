@@ -260,6 +260,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::post('/task-libraries/{taskLibrary}/parts', [TaskLibraryPartController::class, 'store']);
         Route::delete('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'destroy']);
         Route::post('/task-libraries/{taskLibrary}/schedule', [TaskLibraryController::class, 'schedule']);
+        Route::put('/fp3-requests/{fp3Request}/schedule', [Fp3RequestController::class, 'schedule']);
     });
 
     // Reorder request approvals: an "approve" action Supervisor keeps even

@@ -28,6 +28,19 @@ class Fp3RequestService
     }
 
     /**
+     * due_date only — no claim, no status change. The PM Calendar's "drag an
+     * unscheduled card onto a day" action uses this instead of receive(), the
+     * same way dragging a Task Library recipe onto the calendar
+     * (scheduleTaskLibrary) never assigns anyone either.
+     */
+    public function schedule(Fp3Request $fp3Request, string $dueDate): Fp3Request
+    {
+        $fp3Request->update(['due_date' => $dueDate]);
+
+        return $fp3Request;
+    }
+
+    /**
      * The Engineer's report — work_description/executor_names/
      * area_condition_after/disposition are always required (see
      * CompleteFp3RequestRequest); each part used is recorded as its own

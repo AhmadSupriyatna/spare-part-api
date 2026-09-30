@@ -145,6 +145,20 @@ class Fp3RequestTest extends TestCase
         $this->assertNotNull($response->json('data.due_date'));
     }
 
+    public function test_scheduling_sets_due_date_without_claiming_or_changing_status(): void
+    {
+        $fp3 = $this->makeRequest();
+
+        $response = $this->actingAs($this->engineer)->putJson("/api/fp3-requests/{$fp3->id}/schedule", [
+            'due_date' => now()->addDays(5)->toDateString(),
+        ]);
+
+        $response->assertOk();
+        $this->assertNotNull($response->json('data.due_date'));
+        $this->assertSame('pending', $response->json('data.status'));
+        $this->assertNull($fp3->fresh()->received_by);
+    }
+
     // --- Complete ---
 
     public function test_completing_directly_without_receiving_first_still_works(): void
