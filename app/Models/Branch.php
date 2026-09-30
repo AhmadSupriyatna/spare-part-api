@@ -68,6 +68,11 @@ class Branch extends Model
         return $this->hasMany(Machine::class);
     }
 
+    public function fp3Requests(): HasMany
+    {
+        return $this->hasMany(Fp3Request::class);
+    }
+
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class);

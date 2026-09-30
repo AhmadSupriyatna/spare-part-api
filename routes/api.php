@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CompanySettingController;
 use App\Http\Controllers\Api\DashboardAnalyticsController;
 use App\Http\Controllers\Api\DatabaseBackupController;
 use App\Http\Controllers\Api\EquipmentController;
+use App\Http\Controllers\Api\Fp3RequestController;
 use App\Http\Controllers\Api\LineController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\MachineController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Api\PartSupplierController;
 use App\Http\Controllers\Api\PartUnitActionRequestController;
 use App\Http\Controllers\Api\PartUnitController;
 use App\Http\Controllers\Api\PublicBreakdownController;
+use App\Http\Controllers\Api\PublicFp3Controller;
 use App\Http\Controllers\Api\PublicMachineMonitoringController;
 use App\Http\Controllers\Api\PublicPartUnitController;
 use App\Http\Controllers\Api\RackController;
@@ -61,6 +63,10 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
     // QR-per-machine "Monitoring Life Time Mesin" flow: read-only, no
     // submission — see PublicMachineMonitoringController's own docblock.
     Route::get('/machines/{machine}/monitoring', [PublicMachineMonitoringController::class, 'show']);
+
+    // FP3 "Ajukan FP3" flow: one generic QR per branch — see
+    // PublicFp3Controller's own docblock.
+    Route::post('/branches/{branch}/fp3-requests', [PublicFp3Controller::class, 'store']);
 });
 
 // branch.access is a no-op for Superadmin/Supervisor and for any route whose
@@ -154,6 +160,16 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::post('/tasks/{task}/complete', [TaskController::class, 'complete']);
     Route::post('/tasks/{task}/cancel', [TaskController::class, 'cancel']);
     Route::post('/lines/{line}/runtime', [LineController::class, 'addRuntime']);
+
+    // FP3 (Formulir Permintaan Perbaikan dan Pembuatan) — read + claim/work
+    // is open to any authenticated role the same way Task's is above;
+    // Fp3RequestController::ensureCanWork() does the actual
+    // engineer|supervisor|superadmin + claim check.
+    Route::get('/branches/{branch}/fp3-requests', [Fp3RequestController::class, 'indexForBranch']);
+    Route::get('/fp3-requests/{fp3Request}', [Fp3RequestController::class, 'show']);
+    Route::post('/fp3-requests/{fp3Request}/receive', [Fp3RequestController::class, 'receive']);
+    Route::post('/fp3-requests/{fp3Request}/complete', [Fp3RequestController::class, 'complete']);
+    Route::post('/fp3-requests/{fp3Request}/cancel', [Fp3RequestController::class, 'cancel']);
 
     // Master data & inventory: Admin Spare Part is the broadest role day to
     // day, but confined to their own branch by branch.access above; only

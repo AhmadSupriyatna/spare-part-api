@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Budget;
 use App\Models\Equipment;
 use App\Models\Finding;
+use App\Models\Fp3Request;
 use App\Models\Location;
 use App\Models\Machine;
 use App\Models\MaintenanceDecision;
@@ -37,7 +38,7 @@ class BranchScopeResolver
     {
         return match (true) {
             $model instanceof Branch => $model->id,
-            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack, $model instanceof Budget => $model->branch_id,
+            $model instanceof ProductionLine, $model instanceof Supplier, $model instanceof Location, $model instanceof PartStock, $model instanceof Rack, $model instanceof Budget, $model instanceof Fp3Request => $model->branch_id,
             $model instanceof RackLevel => $model->rack->branch_id,
             $model instanceof PartUnitActionRequest => $model->branch_id,
             // "Mesin Luar Line": a Machine may now resolve its branch via

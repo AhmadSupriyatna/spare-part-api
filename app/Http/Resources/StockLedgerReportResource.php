@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Fp3Request;
 use App\Models\PartReplacementRequest;
 use App\Models\StockLedger;
 use App\Models\Task;
@@ -53,6 +54,7 @@ class StockLedgerReportResource extends JsonResource
         return match (true) {
             $this->reference_type === Task::class => 'WO PM',
             $this->reference_type === PartReplacementRequest::class => 'Breakdown',
+            $this->reference_type === Fp3Request::class => 'FP3',
             $this->type === StockLedger::TYPE_RECEIVING => 'Penerimaan',
             $this->type === StockLedger::TYPE_ADJUSTMENT => 'Penyesuaian Manual',
             $this->type === StockLedger::TYPE_RETURN => 'Retur',
