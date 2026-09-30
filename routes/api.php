@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\CompanySettingController;
 use App\Http\Controllers\Api\DashboardAnalyticsController;
 use App\Http\Controllers\Api\DatabaseBackupController;
+use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\Fp3RequestController;
 use App\Http\Controllers\Api\LineController;
@@ -67,6 +68,10 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
     // FP3 "Ajukan FP3" flow: one generic QR per branch — see
     // PublicFp3Controller's own docblock.
     Route::post('/branches/{branch}/fp3-requests', [PublicFp3Controller::class, 'store']);
+
+    // The FP3 form's "Departemen" picklist — same read as the authenticated
+    // /departments below, just reachable without login too.
+    Route::get('/departments', [DepartmentController::class, 'index']);
 });
 
 // branch.access is a no-op for Superadmin/Supervisor and for any route whose
@@ -82,6 +87,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::apiResource('branches', BranchController::class)->only(['index', 'show']);
     Route::apiResource('parts', PartController::class)->only(['index', 'show']);
     Route::get('/units', [UnitController::class, 'index']);
+    Route::get('/departments', [DepartmentController::class, 'index']);
     Route::get('/branches/{branch}/active-users', [UserController::class, 'activeForBranch']);
     Route::get('/settings/company', [CompanySettingController::class, 'show']);
     Route::get('/branches/{branch}/suppliers', [SupplierController::class, 'index']);
@@ -181,6 +187,9 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::post('/units', [UnitController::class, 'store']);
         Route::put('/units/{unit}', [UnitController::class, 'update']);
         Route::delete('/units/{unit}', [UnitController::class, 'destroy']);
+        Route::post('/departments', [DepartmentController::class, 'store']);
+        Route::put('/departments/{department}', [DepartmentController::class, 'update']);
+        Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
         Route::put('/settings/company', [CompanySettingController::class, 'update']);
         Route::post('/branches/{branch}/suppliers', [SupplierController::class, 'store']);
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);

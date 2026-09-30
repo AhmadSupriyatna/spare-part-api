@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\Branch;
+use App\Models\Department;
 use App\Models\Fp3Request;
 use App\Models\Part;
 use App\Models\PartStock;
@@ -36,6 +37,8 @@ class Fp3RequestTest extends TestCase
         parent::setUp();
 
         Storage::fake('public');
+
+        Department::create(['name' => 'Produksi']);
 
         $this->branch = Branch::factory()->create();
 
@@ -185,6 +188,62 @@ class Fp3RequestTest extends TestCase
         $response->assertOk();
         $this->assertCount(1, $response->json('data.part_usages'));
         $this->assertSame(7, $stock->fresh()->quantity_on_hand);
+    }
+
+    public function test_completing_with_a_manual_unregistered_part_does_not_touch_stock(): void
+    {
+        $fp3 = $this->makeRequest();
+
+        $response = $this->actingAs($this->engineer)->postJson("/api/fp3-requests/{$fp3->id}/complete", [
+            'work_description' => 'Ganti baut khusus',
+            'executor_names' => 'Budi',
+            'area_condition_after' => 'Aman',
+            'disposition' => 'closed',
+            'parts' => [
+                ['part_name_manual' => 'Baut M8 (beli sendiri)', 'quantity' => 4, 'notes' => 'Tidak ada di sistem'],
+            ],
+        ]);
+
+        $response->assertOk();
+        $usage = $response->json('data.part_usages')[0];
+        $this->assertSame('Baut M8 (beli sendiri)', $usage['part_name']);
+        $this->assertFalse($usage['is_registered']);
+    }
+
+    public function test_a_part_row_cannot_have_both_part_id_and_manual_name(): void
+    {
+        $fp3 = $this->makeRequest();
+        $part = Part::factory()->create();
+        PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+
+        $response = $this->actingAs($this->engineer)->postJson("/api/fp3-requests/{$fp3->id}/complete", [
+            'work_description' => 'Ganti bracket',
+            'executor_names' => 'Budi',
+            'area_condition_after' => 'Aman',
+            'disposition' => 'closed',
+            'parts' => [
+                ['part_id' => $part->id, 'part_name_manual' => 'Bracket', 'quantity' => 1],
+            ],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_a_part_row_must_have_either_part_id_or_manual_name(): void
+    {
+        $fp3 = $this->makeRequest();
+
+        $response = $this->actingAs($this->engineer)->postJson("/api/fp3-requests/{$fp3->id}/complete", [
+            'work_description' => 'Ganti bracket',
+            'executor_names' => 'Budi',
+            'area_condition_after' => 'Aman',
+            'disposition' => 'closed',
+            'parts' => [
+                ['quantity' => 1],
+            ],
+        ]);
+
+        $response->assertStatus(422);
     }
 
     public function test_completing_with_a_part_that_has_no_stock_record_in_branch_is_rejected(): void

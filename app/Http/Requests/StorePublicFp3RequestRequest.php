@@ -25,7 +25,7 @@ class StorePublicFp3RequestRequest extends FormRequest
     {
         return [
             'requester_name' => ['required', 'string', 'max:255'],
-            'department' => ['required', 'string', 'max:255'],
+            'department' => ['required', 'string', 'max:255', 'exists:departments,name'],
             'description' => ['required', 'string'],
             'photo' => ['required', 'image', 'max:5120'],
         ];

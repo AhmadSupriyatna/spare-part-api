@@ -36,7 +36,7 @@ class Fp3RequestService
      * approval step, since (unlike Breakdown) the person entering it here is
      * the Engineer completing the job, not the original anonymous requester.
      *
-     * @param  array{work_description: string, executor_names: string, area_condition_after: string, disposition: string, disposition_note?: ?string, completion_photo_path?: ?string, parts?: list<array{part_id: int, quantity: int, notes?: ?string}>}  $data
+     * @param  array{work_description: string, executor_names: string, area_condition_after: string, disposition: string, disposition_note?: ?string, completion_photo_path?: ?string, parts?: list<array{part_id?: ?int, part_name_manual?: ?string, quantity: int, notes?: ?string}>}  $data
      *
      * @throws Fp3RequestAlreadyCompletedException if already Completed — checked
      *                                             first, before any stock mutation, so a duplicate submit can't issue stock twice.
@@ -69,20 +69,31 @@ class Fp3RequestService
             ]);
 
             foreach ($data['parts'] ?? [] as $partUsage) {
-                $partStock = PartStock::where('part_id', $partUsage['part_id'])
+                $partId = $partUsage['part_id'] ?? null;
+
+                Fp3PartUsage::create([
+                    'fp3_request_id' => $locked->id,
+                    'part_id' => $partId,
+                    'part_name_manual' => $partId ? null : ($partUsage['part_name_manual'] ?? null),
+                    'quantity' => $partUsage['quantity'],
+                    'notes' => $partUsage['notes'] ?? null,
+                ]);
+
+                // A manual (unregistered) entry has no PartStock to move —
+                // it's recorded for the report only, same as the paper
+                // form's free-text "Kode" column would be for something not
+                // in the system.
+                if ($partId === null) {
+                    continue;
+                }
+
+                $partStock = PartStock::where('part_id', $partId)
                     ->where('branch_id', $locked->branch_id)
                     ->first();
 
                 if (! $partStock) {
-                    throw new PartStockNotFoundException($partUsage['part_id'], $locked->branch_id);
+                    throw new PartStockNotFoundException($partId, $locked->branch_id);
                 }
-
-                Fp3PartUsage::create([
-                    'fp3_request_id' => $locked->id,
-                    'part_id' => $partUsage['part_id'],
-                    'quantity' => $partUsage['quantity'],
-                    'notes' => $partUsage['notes'] ?? null,
-                ]);
 
                 $this->stockMovements->record(
                     partStock: $partStock,

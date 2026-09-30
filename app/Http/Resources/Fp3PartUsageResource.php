@@ -19,8 +19,9 @@ class Fp3PartUsageResource extends JsonResource
         return [
             'id' => $this->id,
             'part_id' => $this->part_id,
-            'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
+            'part_name' => $this->part_id ? $this->whenLoaded('part', fn () => $this->part?->name) : $this->part_name_manual,
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
+            'is_registered' => $this->part_id !== null,
             'quantity' => $this->quantity,
             'notes' => $this->notes,
         ];
