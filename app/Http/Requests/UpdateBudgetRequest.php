@@ -2,10 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\PartReplacementStrategy;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
 
 class UpdateBudgetRequest extends FormRequest
 {
@@ -17,36 +15,31 @@ class UpdateBudgetRequest extends FormRequest
     /**
      * replacement_strategy/year identify which budget this is and are
      * locked once it exists (delete and recreate instead of moving a
-     * budget to a different strategy/year) — only the per-part estimates
-     * and the corrective top-up stay editable.
+     * budget to a different strategy/year) — only the global assumptions,
+     * per-part estimates, and the corrective top-up stay editable.
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
+        $budget = $this->route('budget');
+        $strategy = $budget?->replacement_strategy?->value;
+
         return [
+            'global_lifetime_percent' => $strategy === 'life_based'
+                ? ['required', 'numeric', 'min:1']
+                : ['prohibited'],
+            'global_price_increase_percent' => ['nullable', 'numeric', 'min:0'],
             'items' => ['sometimes', 'array'],
             'items.*.part_id' => ['required_with:items', 'integer', 'exists:parts,id'],
-            'items.*.estimated_lifetime_percent' => ['required_with:items', 'numeric', 'min:1'],
-            'items.*.price_increase_percent' => ['nullable', 'numeric', 'min:0'],
+            'items.*.estimated_failure_count_per_year' => $strategy === 'failure_based'
+                ? ['required_with:items', 'numeric', 'min:0']
+                : ['prohibited'],
+            'items.*.replacement_probability_percent' => $strategy === 'scheduled'
+                ? ['required_with:items', 'numeric', 'min:0', 'max:100']
+                : ['prohibited'],
             'corrective_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
         ];
-    }
-
-    /**
-     * Same LifeBased-only guard as StoreBudgetRequest, but keyed off the
-     * existing budget's own (immutable) strategy rather than form input.
-     */
-    public function withValidator(Validator $validator): void
-    {
-        $validator->after(function (Validator $validator) {
-            $budget = $this->route('budget');
-            $items = $this->input('items');
-
-            if ($budget && $items !== null && $budget->replacement_strategy !== PartReplacementStrategy::LifeBased) {
-                $validator->errors()->add('items', 'Item per-part hanya berlaku untuk budget Berdasarkan Umur Pakai.');
-            }
-        });
     }
 }

@@ -17,15 +17,17 @@ class BudgetItemResource extends JsonResource
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
-            'estimated_lifetime_percent' => $this->estimated_lifetime_percent,
-            'price_increase_percent' => $this->price_increase_percent,
+            'estimated_failure_count_per_year' => $this->estimated_failure_count_per_year,
+            'replacement_probability_percent' => $this->replacement_probability_percent,
             'unit_cost' => $this->unit_cost,
             'estimated_cost' => $this->estimated_cost,
-            // Set by BudgetController via BudgetForecastService::lineBreakdown()
-            // before wrapping — a live per-Line split computed fresh from
-            // current installations, never stored, so it can't go stale as
-            // parts move between lines after the budget is saved.
+            // Set by BudgetController via BudgetForecastService::lineBreakdown()/
+            // machineBreakdown() before wrapping — live splits computed fresh
+            // from current installations, never stored, so they can't go
+            // stale as parts move between lines/machines after the budget is
+            // saved.
             'by_line' => $this->when(isset($this->by_line), fn () => $this->by_line),
+            'by_machine' => $this->when(isset($this->by_machine), fn () => $this->by_machine),
         ];
     }
 }

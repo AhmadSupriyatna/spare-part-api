@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Enums\PartReplacementStrategy;
 use App\Models\Branch;
+use App\Models\Budget;
+use App\Models\BudgetManualEntry;
 use App\Models\PartReplacementRequest;
 use App\Models\StockLedger;
 use App\Models\Task;
@@ -22,11 +24,15 @@ class BudgetRealizationService
      * Split into planned (reference is a Task, i.e. a PM/WO checklist) vs
      * unplanned (reference is a PartReplacementRequest, i.e. breakdown) —
      * trivial once the reference is there, and it's the "planned vs
-     * unplanned" KPI the user asked for.
+     * unplanned" KPI the user asked for. `manual` is a third, independent
+     * bucket: BudgetManualEntry 'actual' rows logged by hand for spend that
+     * never passed through stock_ledger at all (e.g. a service call paid
+     * directly) — added to `total` alongside planned/unplanned, not merged
+     * into either, since it's neither a Task nor a PartReplacementRequest.
      *
-     * @return array{planned: string, unplanned: string, total: string, unpriced_transactions: int}
+     * @return array{planned: string, unplanned: string, manual: string, total: string, unpriced_transactions: int}
      */
-    public function calculateRealization(Branch $branch, PartReplacementStrategy $strategy, int $year): array
+    public function calculateRealization(Branch $branch, PartReplacementStrategy $strategy, int $year, ?Budget $budget = null): array
     {
         $start = Carbon::create($year, 1, 1)->startOfYear();
         $end = Carbon::create($year, 1, 1)->endOfYear();
@@ -59,10 +65,18 @@ class BudgetRealizationService
             }
         }
 
+        $manual = $budget
+            ? $budget->manualEntries->where('type', BudgetManualEntry::TYPE_ACTUAL)->reduce(
+                fn (string $carry, BudgetManualEntry $entry) => bcadd($carry, (string) $entry->amount, 2),
+                '0.00',
+            )
+            : '0.00';
+
         return [
             'planned' => $planned,
             'unplanned' => $unplanned,
-            'total' => bcadd($planned, $unplanned, 2),
+            'manual' => $manual,
+            'total' => bcadd(bcadd($planned, $unplanned, 2), $manual, 2),
             'unpriced_transactions' => $unpricedTransactions,
         ];
     }

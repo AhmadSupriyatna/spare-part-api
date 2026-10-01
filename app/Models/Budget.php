@@ -20,6 +20,8 @@ class Budget extends Model
     protected $fillable = [
         'branch_id',
         'replacement_strategy',
+        'global_lifetime_percent',
+        'global_price_increase_percent',
         'year',
         'planned_amount',
         'corrective_amount',
@@ -31,6 +33,8 @@ class Budget extends Model
     {
         return [
             'year' => 'integer',
+            'global_lifetime_percent' => 'decimal:2',
+            'global_price_increase_percent' => 'decimal:2',
             'planned_amount' => 'decimal:2',
             'corrective_amount' => 'decimal:2',
             'replacement_strategy' => PartReplacementStrategy::class,
@@ -47,13 +51,29 @@ class Budget extends Model
         return $this->hasMany(BudgetItem::class);
     }
 
+    public function manualEntries(): HasMany
+    {
+        return $this->hasMany(BudgetManualEntry::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /**
+     * planned_amount (auto-forecast) + corrective_amount (manual top-up) +
+     * every manual 'planned' entry — corrective_amount predates
+     * BudgetManualEntry and is kept as-is for backward compatibility rather
+     * than migrated into it.
+     */
     public function totalAmount(): string
     {
-        return bcadd($this->planned_amount, $this->corrective_amount, 2);
+        $manualPlanned = $this->manualEntries->where('type', BudgetManualEntry::TYPE_PLANNED)->reduce(
+            fn (string $carry, BudgetManualEntry $entry) => bcadd($carry, (string) $entry->amount, 2),
+            '0.00',
+        );
+
+        return bcadd(bcadd($this->planned_amount, $this->corrective_amount, 2), $manualPlanned, 2);
     }
 }

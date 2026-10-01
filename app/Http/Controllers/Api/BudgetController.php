@@ -26,7 +26,8 @@ class BudgetController extends Controller
 
     public function index(Request $request, Branch $branch): AnonymousResourceCollection
     {
-        $query = $branch->budgets()->with(['creator', 'items.part'])->orderByDesc('year')->orderBy('replacement_strategy');
+        $query = $branch->budgets()->with(['creator', 'items.part', 'manualEntries.line', 'manualEntries.machine', 'manualEntries.creator'])
+            ->orderByDesc('year')->orderBy('replacement_strategy');
 
         if ($request->filled('year')) {
             $query->where('year', $request->integer('year'));
@@ -35,9 +36,9 @@ class BudgetController extends Controller
         $budgets = $query->get()->each(function (Budget $budget) use ($branch) {
             $budget->setAttribute(
                 'realization',
-                $this->realization->calculateRealization($branch, $budget->replacement_strategy, $budget->year)
+                $this->realization->calculateRealization($branch, $budget->replacement_strategy, $budget->year, $budget)
             );
-            $this->attachLineBreakdowns($budget, $branch);
+            $this->attachBreakdowns($budget, $branch);
         });
 
         return BudgetResource::collection($budgets);
@@ -47,9 +48,9 @@ class BudgetController extends Controller
      * Parts under this replacement strategy (branch-wide) that currently
      * have an active installation, with current unit cost — what the budget
      * input drawer renders as the per-part input rows, before the user has
-     * entered anything. Only meaningful for LifeBased (the only strategy
-     * with an automatic forecast); the drawer doesn't call this for any
-     * other strategy.
+     * entered anything. Works for all 3 strategies now; which extra input
+     * field the drawer asks for alongside this list depends on the
+     * strategy (see StoreBudgetRequest).
      */
     public function partsForStrategy(Request $request, Branch $branch): JsonResponse
     {
@@ -67,24 +68,26 @@ class BudgetController extends Controller
         $data = $request->validated();
 
         $budget = DB::transaction(function () use ($data, $branch, $request) {
-            $priced = $this->forecast->priceItems($branch, $data['items'] ?? []);
-
             $budget = $branch->budgets()->create([
                 'replacement_strategy' => $data['replacement_strategy'],
+                'global_lifetime_percent' => $data['global_lifetime_percent'] ?? null,
+                'global_price_increase_percent' => $data['global_price_increase_percent'] ?? 0,
                 'year' => $data['year'],
-                'planned_amount' => $priced['planned_amount'],
+                'planned_amount' => 0,
                 'corrective_amount' => $data['corrective_amount'] ?? 0,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $request->user()->id,
             ]);
 
+            $priced = $this->forecast->priceItems($branch, $budget, $data['items'] ?? []);
             $budget->items()->createMany($priced['items']);
+            $budget->update(['planned_amount' => $priced['planned_amount']]);
 
             return $budget;
         });
 
-        $budget->load(['creator', 'items.part']);
-        $this->attachLineBreakdowns($budget, $branch);
+        $budget->load(['creator', 'items.part', 'manualEntries.line', 'manualEntries.machine', 'manualEntries.creator']);
+        $this->attachBreakdowns($budget, $branch);
 
         return new BudgetResource($budget);
     }
@@ -99,18 +102,25 @@ class BudgetController extends Controller
                 'notes' => $data['notes'] ?? null,
             ];
 
-            if (isset($data['items'])) {
-                $priced = $this->forecast->priceItems($budget->branch, $data['items']);
-                $updates['planned_amount'] = $priced['planned_amount'];
-                $budget->items()->delete();
-                $budget->items()->createMany($priced['items']);
+            if (array_key_exists('global_lifetime_percent', $data)) {
+                $updates['global_lifetime_percent'] = $data['global_lifetime_percent'];
+            }
+            if (array_key_exists('global_price_increase_percent', $data)) {
+                $updates['global_price_increase_percent'] = $data['global_price_increase_percent'];
             }
 
             $budget->update($updates);
+
+            if (isset($data['items'])) {
+                $priced = $this->forecast->priceItems($budget->branch, $budget->fresh(), $data['items']);
+                $budget->items()->delete();
+                $budget->items()->createMany($priced['items']);
+                $budget->update(['planned_amount' => $priced['planned_amount']]);
+            }
         });
 
-        $budget->load(['creator', 'items.part']);
-        $this->attachLineBreakdowns($budget, $budget->branch);
+        $budget->load(['creator', 'items.part', 'manualEntries.line', 'manualEntries.machine', 'manualEntries.creator']);
+        $this->attachBreakdowns($budget, $budget->branch);
 
         return new BudgetResource($budget);
     }
@@ -122,19 +132,15 @@ class BudgetController extends Controller
         return response()->noContent();
     }
 
-    private function attachLineBreakdowns(Budget $budget, Branch $branch): void
+    private function attachBreakdowns(Budget $budget, Branch $branch): void
     {
         foreach ($budget->items as $item) {
             if (! $item->part) {
                 continue;
             }
 
-            $item->setAttribute('by_line', $this->forecast->lineBreakdown(
-                $branch,
-                $item->part,
-                (float) $item->estimated_lifetime_percent,
-                (float) $item->price_increase_percent,
-            ));
+            $item->setAttribute('by_line', $this->forecast->lineBreakdown($branch, $item));
+            $item->setAttribute('by_machine', $this->forecast->machineBreakdown($branch, $item));
         }
     }
 }
