@@ -2,18 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Enums\PartReplacementStrategy;
+use App\Enums\TaskStatus;
 use App\Enums\UserRole;
 use App\Models\Branch;
 use App\Models\Budget;
 use App\Models\Equipment;
 use App\Models\Machine;
 use App\Models\Part;
+use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
 use App\Models\ProductionLine;
 use App\Models\StockLedger;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\PartLifecycleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
@@ -82,7 +86,7 @@ class DashboardAnalyticsTest extends TestCase
 
         $trend = collect($this->fetchAnalytics()->json('data.failure_trend'))->keyBy('month');
 
-        $this->assertSame(1, $trend[now()->format('Y-m')]['count']);
+        $this->assertSame(1, $trend[now()->format('Y-m')]['failure_count']);
     }
 
     public function test_failure_trend_counts_events_under_an_outside_line_machine(): void
@@ -102,7 +106,7 @@ class DashboardAnalyticsTest extends TestCase
 
         $trend = collect($this->fetchAnalytics()->json('data.failure_trend'))->keyBy('month');
 
-        $this->assertSame(1, $trend[now()->format('Y-m')]['count']);
+        $this->assertSame(1, $trend[now()->format('Y-m')]['failure_count']);
     }
 
     public function test_failure_trend_ignores_a_different_branch(): void
@@ -124,7 +128,7 @@ class DashboardAnalyticsTest extends TestCase
 
         $trend = collect($this->fetchAnalytics()->json('data.failure_trend'))->keyBy('month');
 
-        $this->assertSame(0, $trend[now()->format('Y-m')]['count']);
+        $this->assertSame(0, $trend[now()->format('Y-m')]['failure_count']);
     }
 
     public function test_cost_heatmap_groups_by_line_and_machine_and_sums_cost(): void
@@ -228,5 +232,163 @@ class DashboardAnalyticsTest extends TestCase
         }
 
         $this->assertNull($futureMonth['actual_cumulative']);
+    }
+
+    public function test_failure_trend_replacement_count_counts_new_part_installations(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+
+        PartInstallation::create([
+            'equipment_id' => $equipment->id,
+            'part_id' => $part->id,
+            'installed_at' => now(),
+        ]);
+
+        $trend = collect($this->fetchAnalytics()->json('data.failure_trend'))->keyBy('month');
+
+        $this->assertSame(1, $trend[now()->format('Y-m')]['replacement_count']);
+    }
+
+    public function test_failure_trend_replacement_cost_sums_spend_by_month(): void
+    {
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+        $task = Task::factory()->create();
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -2,
+            'balance_after' => 8,
+            'unit_cost' => '75000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now(),
+        ]);
+
+        $trend = collect($this->fetchAnalytics()->json('data.failure_trend'))->keyBy('month');
+
+        $this->assertSame('150000.00', $trend[now()->format('Y-m')]['replacement_cost']);
+    }
+
+    public function test_failure_radial_groups_failure_breakdown_reports_by_line_and_machine(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'name' => 'Line A']);
+        $machine = Machine::factory()->create(['line_id' => $line->id, 'name' => 'Mesin Press']);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+
+        foreach (['failure', 'breakdown'] as $eventType) {
+            PartReplacementRequest::create([
+                'part_id' => $part->id,
+                'equipment_id' => $equipment->id,
+                'event_type' => $eventType,
+                'status' => 'pending',
+                'reason' => 'Rusak',
+                'requested_by_name' => 'Teknisi',
+                'quantity_used' => 1,
+            ]);
+        }
+
+        $radial = collect($this->fetchAnalytics()->json('data.failure_radial'));
+        $cell = $radial->firstWhere('line_name', 'Line A');
+
+        $this->assertNotNull($cell);
+        $this->assertSame('Mesin Press', $cell['machine_name']);
+        $this->assertSame(2, $cell['count']);
+    }
+
+    public function test_maintenance_performance_splits_completed_tasks_by_on_time_vs_late(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+
+        Task::factory()->create([
+            'equipment_id' => $equipment->id,
+            'status' => TaskStatus::Completed,
+            'due_date' => now()->subDays(2),
+            'completed_at' => now()->subDays(3),
+        ]);
+        Task::factory()->create([
+            'equipment_id' => $equipment->id,
+            'status' => TaskStatus::Completed,
+            'due_date' => now()->subDays(5),
+            'completed_at' => now()->subDays(1),
+        ]);
+
+        $performance = $this->fetchAnalytics()->json('data.maintenance_performance');
+
+        $this->assertSame(1, $performance['on_time_count']);
+        $this->assertSame(1, $performance['late_count']);
+    }
+
+    public function test_at_risk_parts_surfaces_an_installation_past_the_threshold(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'runtime_hours' => 0, 'name' => 'Line A']);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create([
+            'replacement_strategy' => PartReplacementStrategy::LifeBased,
+            'estimated_lifetime_hours' => 100,
+        ]);
+
+        app(PartLifecycleService::class)->install($equipment, ['part_id' => $part->id], $this->admin);
+        $line->update(['runtime_hours' => 85]); // 85/100 = 85% used, above the 80% threshold
+
+        $atRisk = collect($this->fetchAnalytics()->json('data.at_risk_parts'));
+        $entry = $atRisk->firstWhere('part_name', $part->name);
+
+        $this->assertNotNull($entry);
+        $this->assertSame('Line A', $entry['line_name']);
+        $this->assertSame(85, $entry['percent_used']);
+    }
+
+    public function test_installation_map_counts_active_installations_by_line_and_machine(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'name' => 'Line A']);
+        $machine = Machine::factory()->create(['line_id' => $line->id, 'name' => 'Mesin Press']);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $partA = Part::factory()->create();
+        $partB = Part::factory()->create();
+
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $partA->id, 'installed_at' => now()]);
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $partB->id, 'installed_at' => now()]);
+        // Removed — must not be counted.
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $partA->id, 'installed_at' => now(), 'removed_at' => now()]);
+
+        $map = collect($this->fetchAnalytics()->json('data.installation_map'));
+        $cell = $map->firstWhere('line_name', 'Line A');
+
+        $this->assertNotNull($cell);
+        $this->assertSame('Mesin Press', $cell['machine_name']);
+        $this->assertSame(2, $cell['count']);
+    }
+
+    public function test_cost_by_part_sums_spend_grouped_by_part(): void
+    {
+        $part = Part::factory()->create(['name' => 'Gear Reducer 1:20']);
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+        $task = Task::factory()->create();
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -3,
+            'balance_after' => 7,
+            'unit_cost' => '20000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now(),
+        ]);
+
+        $byPart = collect($this->fetchAnalytics()->json('data.cost_by_part'));
+        $row = $byPart->firstWhere('part_name', 'Gear Reducer 1:20');
+
+        $this->assertNotNull($row);
+        $this->assertSame('60000.00', $row['cost']);
     }
 }

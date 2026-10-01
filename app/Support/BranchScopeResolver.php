@@ -23,6 +23,7 @@ use App\Models\RackLevel;
 use App\Models\Supplier;
 use App\Models\Task;
 use App\Models\TaskLibrary;
+use App\Models\TaskLibraryChecklistItem;
 use App\Models\TaskLibraryPart;
 use App\Models\WorkOrder;
 
@@ -59,7 +60,7 @@ class BranchScopeResolver
             // a branch on their own, only via their Finding's equipment.
             $model instanceof MaintenanceDecision => $model->finding->equipment->resolvedBranchId(),
             $model instanceof WorkOrder, $model instanceof Task, $model instanceof TaskLibrary, $model instanceof PartInstallation, $model instanceof PartReplacementRequest => $model->equipment->resolvedBranchId(),
-            $model instanceof TaskLibraryPart => $model->taskLibrary->equipment->resolvedBranchId(),
+            $model instanceof TaskLibraryPart, $model instanceof TaskLibraryChecklistItem => $model->taskLibrary->equipment->resolvedBranchId(),
             $model instanceof PartSupplier => $model->supplier->branch_id,
             $model instanceof PartRepair => $model->partInstallation?->equipment?->resolvedBranchId(),
             $model instanceof PartUnit => $this->resolvePartUnitBranch($model),
