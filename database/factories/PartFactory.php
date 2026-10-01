@@ -35,6 +35,46 @@ class PartFactory extends Factory
         ['name' => 'Sarung Tangan Safety', 'category' => 'Consumable', 'unit' => 'box'],
         ['name' => 'Majun Pembersih', 'category' => 'Consumable', 'unit' => 'box'],
         ['name' => 'Mata Bor HSS 10mm', 'category' => 'Consumable', 'unit' => 'pcs'],
+        // --- AC / Tata Udara ---
+        ['name' => 'Freon R32', 'category' => 'AC', 'unit' => 'kg'],
+        ['name' => 'Filter Udara AC Split', 'category' => 'AC', 'unit' => 'pcs'],
+        ['name' => 'Kapasitor AC 25uF', 'category' => 'AC', 'unit' => 'pcs'],
+        ['name' => 'Kondensor AC Split 1PK', 'category' => 'AC', 'unit' => 'set'],
+        ['name' => 'Evaporator Coil AC', 'category' => 'AC', 'unit' => 'set'],
+        ['name' => 'Thermostat Digital AC', 'category' => 'AC', 'unit' => 'pcs'],
+        ['name' => 'Motor Fan Indoor AC', 'category' => 'AC', 'unit' => 'pcs'],
+        // --- Material Handling (Forklift/Hand Lift) ---
+        ['name' => 'Roda Hand Lift Poly', 'category' => 'Material Handling', 'unit' => 'pcs'],
+        ['name' => 'Selang Hidrolik Forklift', 'category' => 'Material Handling', 'unit' => 'meter'],
+        ['name' => 'Garpu Forklift', 'category' => 'Material Handling', 'unit' => 'pasang'],
+        ['name' => 'Aki Forklift 24V', 'category' => 'Material Handling', 'unit' => 'pcs'],
+        ['name' => 'Oli Hidrolik ISO 46', 'category' => 'Material Handling', 'unit' => 'liter'],
+        // --- Peralatan Tangan (Bor/Gerinda/Heat Gun) ---
+        ['name' => 'Mata Gerinda Potong 4 Inch', 'category' => 'Peralatan Tangan', 'unit' => 'pcs'],
+        ['name' => 'Mata Gerinda Asah', 'category' => 'Peralatan Tangan', 'unit' => 'pcs'],
+        ['name' => 'Carbon Brush Bor', 'category' => 'Peralatan Tangan', 'unit' => 'pasang'],
+        ['name' => 'Chuck Bor 13mm', 'category' => 'Peralatan Tangan', 'unit' => 'pcs'],
+        ['name' => 'Elemen Pemanas Heat Gun', 'category' => 'Peralatan Tangan', 'unit' => 'pcs'],
+        ['name' => 'Kabel Power Universal', 'category' => 'Peralatan Tangan', 'unit' => 'pcs'],
+        // --- Scrubbler / Cleaning ---
+        ['name' => 'Brush Scrubbler Nylon', 'category' => 'Cleaning', 'unit' => 'pcs'],
+        ['name' => 'Squeegee Blade Scrubbler', 'category' => 'Cleaning', 'unit' => 'pcs'],
+        ['name' => 'Baterai Scrubbler 24V', 'category' => 'Cleaning', 'unit' => 'set'],
+        // --- Ink Coder / Printing ---
+        ['name' => 'Ink Cartridge Continuous Printer', 'category' => 'Ink Coder', 'unit' => 'pcs'],
+        ['name' => 'Print Head Inkjet', 'category' => 'Ink Coder', 'unit' => 'pcs'],
+        ['name' => 'Solvent Pembersih Nozzle', 'category' => 'Ink Coder', 'unit' => 'liter'],
+        ['name' => 'Filter Ink Coder', 'category' => 'Ink Coder', 'unit' => 'pcs'],
+        // --- Checkweigher / Sterilizer ---
+        ['name' => 'Load Cell 5kg', 'category' => 'Checkweigher', 'unit' => 'pcs'],
+        ['name' => 'Gasket Sterilizer Silikon', 'category' => 'Sterilizer', 'unit' => 'pcs'],
+        ['name' => 'Sensor Suhu PT100', 'category' => 'Sterilizer', 'unit' => 'pcs'],
+        ['name' => 'Kaca Indikator Level Sterilizer', 'category' => 'Sterilizer', 'unit' => 'pcs'],
+        // --- Conveyor ---
+        ['name' => 'Sprocket Conveyor', 'category' => 'Conveyor', 'unit' => 'pcs'],
+        ['name' => 'Rantai Conveyor RS40', 'category' => 'Conveyor', 'unit' => 'meter'],
+        ['name' => 'Roller Conveyor Idler', 'category' => 'Conveyor', 'unit' => 'pcs'],
+        ['name' => 'Bantalan UCP 205', 'category' => 'Conveyor', 'unit' => 'pcs'],
     ];
 
     /**
