@@ -23,7 +23,7 @@ class TaskLibraryController extends Controller
     public function index(Equipment $equipment): AnonymousResourceCollection
     {
         return TaskLibraryResource::collection(
-            $equipment->taskLibraries()->with(['equipment.machine.line', 'parts.part'])->orderBy('id')->get()
+            $equipment->taskLibraries()->with(['equipment.machine.line', 'parts.part', 'checklistItems'])->orderBy('id')->get()
         );
     }
 
@@ -37,7 +37,7 @@ class TaskLibraryController extends Controller
         return TaskLibraryResource::collection(
             TaskLibrary::whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
                 ->where('is_active', true)
-                ->with(['equipment.machine.line', 'parts.part'])
+                ->with(['equipment.machine.line', 'parts.part', 'checklistItems'])
                 ->orderBy('id')
                 ->get()
         );
@@ -53,9 +53,10 @@ class TaskLibraryController extends Controller
     {
         $data = $request->validated();
         $partsData = $data['parts'] ?? [];
-        unset($data['parts']);
+        $checklistItemsData = $data['checklist_items'] ?? [];
+        unset($data['parts'], $data['checklist_items']);
 
-        $library = DB::transaction(function () use ($equipment, $data, $partsData) {
+        $library = DB::transaction(function () use ($equipment, $data, $partsData, $checklistItemsData) {
             // Sequence is already scoped to this exact equipment_id (not by
             // code prefix), so it was never the source of collisions.
             $sequence = $equipment->taskLibraries()->count() + 1;
@@ -75,22 +76,29 @@ class TaskLibraryController extends Controller
                 ]);
             }
 
+            foreach ($checklistItemsData as $order => $itemData) {
+                $library->checklistItems()->create([
+                    'description' => $itemData['description'],
+                    'order' => $order,
+                ]);
+            }
+
             return $library;
         });
 
-        return new TaskLibraryResource($library->load(['equipment.machine.line', 'parts.part']));
+        return new TaskLibraryResource($library->load(['equipment.machine.line', 'parts.part', 'checklistItems']));
     }
 
     public function show(TaskLibrary $taskLibrary): TaskLibraryResource
     {
-        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part']));
+        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part', 'checklistItems']));
     }
 
     public function update(UpdateTaskLibraryRequest $request, TaskLibrary $taskLibrary): TaskLibraryResource
     {
         $taskLibrary->update($request->validated());
 
-        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part']));
+        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part', 'checklistItems']));
     }
 
     public function destroy(TaskLibrary $taskLibrary): Response
@@ -111,7 +119,7 @@ class TaskLibraryController extends Controller
         $task = $this->scheduling->schedule($taskLibrary, $data['due_date'], $data['assigned_to'] ?? null);
 
         return new TaskResource(
-            $task->load(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part'])
+            $task->load(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part', 'checklistItems'])
         );
     }
 }

@@ -20,7 +20,12 @@ class CompanySettingResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'logo_url' => $this->logoUrl(),
+            // Falls back to the hardcoded default the app shipped with —
+            // never blank in the UI just because no one has set it yet.
+            'app_name' => $this->app_name ?? 'Sistem Manajemen Spare Part',
+            'app_logo_url' => $this->appLogoUrl(),
             'avg_weekly_operating_hours' => $this->avg_weekly_operating_hours,
+            'kwh_input_mode' => $this->kwh_input_mode,
         ];
     }
 }

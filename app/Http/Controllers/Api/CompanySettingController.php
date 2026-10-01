@@ -20,11 +20,27 @@ class CompanySettingController extends Controller
     public function update(UpdateCompanySettingRequest $request): CompanySettingResource
     {
         $setting = CompanySetting::current();
-        $data = $request->safe()->except('logo');
+        $data = $request->safe()->except(['logo', 'app_logo', 'app_name']);
 
         if ($request->hasFile('logo')) {
             $this->logos->delete($setting->logo_path);
             $data['logo_path'] = $this->logos->store($request->file('logo'));
+        }
+
+        // "Nama Aplikasi" + its logo are the app's own in-product branding,
+        // not the company's printed-paperwork identity above — only ever
+        // persisted for a Superadmin, silently dropped otherwise rather
+        // than rejecting the whole request (the rest of the form is still
+        // valid for Admin Spare Part/Supervisor).
+        if ($request->user()->hasRole('superadmin')) {
+            if ($request->has('app_name')) {
+                $data['app_name'] = $request->input('app_name') ?: null;
+            }
+
+            if ($request->hasFile('app_logo')) {
+                $this->logos->delete($setting->app_logo_path);
+                $data['app_logo_path'] = $this->logos->store($request->file('app_logo'));
+            }
         }
 
         $setting->update($data);

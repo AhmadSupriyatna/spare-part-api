@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\TaskLibrary;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\TaskLibrary
+ * @mixin TaskLibrary
  */
 class TaskLibraryResource extends JsonResource
 {
@@ -31,6 +32,7 @@ class TaskLibraryResource extends JsonResource
             'estimated_duration_minutes' => $this->estimated_duration_minutes,
             'is_active' => $this->is_active,
             'parts' => TaskLibraryPartResource::collection($this->whenLoaded('parts')),
+            'checklist_items' => TaskLibraryChecklistItemResource::collection($this->whenLoaded('checklistItems')),
             'created_at' => $this->created_at,
         ];
     }

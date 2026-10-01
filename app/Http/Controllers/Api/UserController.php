@@ -8,14 +8,19 @@ use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\Branch;
 use App\Models\User;
+use App\Services\MaintenanceReportService;
 use App\Services\UserAvatarService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    public function __construct(private readonly UserAvatarService $avatars) {}
+    public function __construct(
+        private readonly UserAvatarService $avatars,
+        private readonly MaintenanceReportService $reports,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -117,5 +122,16 @@ class UserController extends Controller
             ->get();
 
         return UserResource::collection($users);
+    }
+
+    /**
+     * The registered "SPV Teknik" for a branch — Laporan Pemeriksaan
+     * Mesin's signature block prints this real name instead of a bare
+     * "SPV Teknik" label. Null (no fallback name) if no supervisor is
+     * assigned to the branch.
+     */
+    public function supervisorForBranch(Branch $branch): JsonResponse
+    {
+        return response()->json(['data' => ['name' => $this->reports->supervisorNameForBranch($branch->id)]]);
     }
 }

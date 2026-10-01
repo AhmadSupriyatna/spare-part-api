@@ -12,6 +12,7 @@ use App\Exceptions\TaskAlreadyCompletedException;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
+use App\Models\TaskChecklistItem;
 use App\Models\TaskPartCheck;
 use App\Models\User;
 use App\Models\WorkOrder;
@@ -50,7 +51,13 @@ class TaskService
      * — see completeChecklist(). `finding` is entirely optional and
      * independent of is_replaced (see completeChecklist()'s own docblock).
      *
+     * $checklistItems is independent of $checks — a task can carry both (or,
+     * for a checklist-only Task Library with no parts, just this): one entry
+     * per condition-check item — `{id, condition_ok, notes?}` — see
+     * completeChecklistItems().
+     *
      * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int, finding?: ?array{description: string, result: string, severity?: ?string, recommendation?: ?string}}>|null  $checks
+     * @param  array<int, array{id: int, condition_ok: bool, notes?: ?string}>|null  $checklistItems
      *
      * @throws TaskAlreadyCompletedException if the task is already Completed —
      *                                       checked first, before any stock/lifecycle mutation, so a second
@@ -68,8 +75,9 @@ class TaskService
         ?int $partStockId = null,
         ?int $quantityUsed = null,
         ?array $checks = null,
+        ?array $checklistItems = null,
     ): Task {
-        return DB::transaction(function () use ($task, $user, $notes, $partStockId, $quantityUsed, $checks) {
+        return DB::transaction(function () use ($task, $user, $notes, $partStockId, $quantityUsed, $checks, $checklistItems) {
             // Locked so a concurrent completion request for the same task
             // can't both read "not yet Completed" before either commits —
             // the second request blocks on this row until the first
@@ -122,6 +130,14 @@ class TaskService
                         reference: $locked,
                     );
                 }
+            }
+
+            // Condition-check items are completed independently of which
+            // branch above ran — a task can carry both a part checklist and
+            // checklist items (or, for a checklist-only Task Library, just
+            // the latter).
+            if ($locked->checklistItems()->exists()) {
+                $this->completeChecklistItems($locked, $checklistItems ?? []);
             }
 
             $locked->update([
@@ -273,6 +289,37 @@ class TaskService
             if (! empty($check['finding'])) {
                 $this->findings->createFromTaskPartCheck($partCheck, $task->equipment_id, $check['finding'], $user);
             }
+        }
+    }
+
+    /**
+     * Ids are already scoped to this task and validated to exist against
+     * task_checklist_items by CompleteTaskRequest (Rule::exists(...)
+     * ->where('task_id', ...)) — unlike completeChecklist() above, there's
+     * no second client-supplied field to cross-check an id against, so a
+     * row that doesn't resolve here is simply skipped rather than treated
+     * as a spoofing attempt.
+     *
+     * @param  array<int, array{id: int, condition_ok: bool, notes?: ?string}>  $items
+     */
+    private function completeChecklistItems(Task $task, array $items): void
+    {
+        $taskChecklistItems = TaskChecklistItem::where('task_id', $task->id)
+            ->whereIn('id', collect($items)->pluck('id'))
+            ->get()
+            ->keyBy('id');
+
+        foreach ($items as $item) {
+            $checklistItem = $taskChecklistItems->get($item['id']);
+
+            if (! $checklistItem) {
+                continue;
+            }
+
+            $checklistItem->update([
+                'condition_ok' => (bool) $item['condition_ok'],
+                'notes' => $item['notes'] ?? null,
+            ]);
         }
     }
 

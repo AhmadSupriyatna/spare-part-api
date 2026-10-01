@@ -26,6 +26,11 @@ class TaskPartCheckResource extends JsonResource
             'quantity_used' => $this->quantity_used,
             'reason' => $this->reason,
             'part_installation_id' => $this->part_installation_id,
+            // Only ever set for a row that was actually replaced (see
+            // TaskService::completeChecklist()) — a "not replaced" row
+            // never recorded which physical unit/address it was, so this
+            // stays null there rather than guessing.
+            'slot_label' => $this->whenLoaded('partInstallation', fn () => $this->partInstallation?->slot_label),
         ];
     }
 }

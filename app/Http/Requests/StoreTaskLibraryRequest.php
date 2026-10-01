@@ -43,6 +43,11 @@ class StoreTaskLibraryRequest extends FormRequest
                     fn ($q) => $q->where('equipment_id', $this->route('equipment')?->id)->whereNull('removed_at')
                 ),
             ],
+            // Generic condition-check items (Kondisi Baik/Tidak), independent
+            // of the part-replacement checklist above — see
+            // TaskLibraryChecklistItem's docblock.
+            'checklist_items' => ['nullable', 'array'],
+            'checklist_items.*.description' => ['required', 'string', 'max:500'],
         ];
     }
 }

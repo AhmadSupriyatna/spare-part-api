@@ -14,7 +14,10 @@ class CompanySetting extends Model
     protected $fillable = [
         'name',
         'logo_path',
+        'app_name',
+        'app_logo_path',
         'avg_weekly_operating_hours',
+        'kwh_input_mode',
     ];
 
     protected function casts(): array
@@ -32,5 +35,10 @@ class CompanySetting extends Model
     public function logoUrl(): ?string
     {
         return $this->logo_path ? Storage::disk('public')->url($this->logo_path) : null;
+    }
+
+    public function appLogoUrl(): ?string
+    {
+        return $this->app_logo_path ? Storage::disk('public')->url($this->app_logo_path) : null;
     }
 }

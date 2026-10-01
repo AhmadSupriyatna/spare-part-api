@@ -44,6 +44,7 @@ class TaskResource extends JsonResource
             'item_master_no' => $this->whenLoaded('partStock', fn () => $this->partStock?->part?->item_master_no),
             'quantity_used' => $this->quantity_used,
             'part_checks' => TaskPartCheckResource::collection($this->whenLoaded('partChecks')),
+            'checklist_items' => TaskChecklistItemResource::collection($this->whenLoaded('checklistItems')),
             'is_overdue' => $this->isOverdue(),
             'created_at' => $this->created_at,
         ];

@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\PartInstallation;
 use App\Models\Task;
+use App\Models\TaskChecklistItem;
 use App\Models\TaskLibrary;
 use App\Models\TaskPartCheck;
 use Illuminate\Support\Carbon;
@@ -54,6 +55,16 @@ class PmSchedulingService
                         'quantity_planned' => 1,
                     ]);
                 }
+            }
+
+            // Condition-check items (Kondisi Baik/Tidak), snapshotted the
+            // same way — independent of the part checklist above.
+            foreach ($library->checklistItems as $libraryItem) {
+                TaskChecklistItem::create([
+                    'task_id' => $task->id,
+                    'task_library_checklist_item_id' => $libraryItem->id,
+                    'description' => $libraryItem->description,
+                ]);
             }
 
             return $task;

@@ -57,4 +57,9 @@ class ProductionLine extends Model
     {
         return $this->hasMany(LineRuntimeLog::class, 'line_id')->latest();
     }
+
+    public function kwhLogs(): HasMany
+    {
+        return $this->hasMany(LineKwhLog::class, 'line_id')->latest('week_start_date');
+    }
 }

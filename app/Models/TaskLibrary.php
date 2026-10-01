@@ -42,6 +42,11 @@ class TaskLibrary extends Model
         return $this->hasMany(TaskLibraryPart::class);
     }
 
+    public function checklistItems(): HasMany
+    {
+        return $this->hasMany(TaskLibraryChecklistItem::class)->orderBy('order');
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);

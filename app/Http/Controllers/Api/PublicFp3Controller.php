@@ -14,11 +14,25 @@ use App\Services\Fp3PhotoService;
  * Unauthenticated "Ajukan FP3" QR-scan submission — one generic QR printed
  * per branch (not tied to any machine/part/line, unlike every other QR flow
  * in this app), reached by any staff member in any department. No login,
- * same access level as PublicBreakdownController.
+ * same access level as PublicBreakdownController. Also serves the QR
+ * Validator scanned off a printed FP3 (show()) — same controller since both
+ * are "the public FP3 surface", just opposite ends of one request's life.
  */
 class PublicFp3Controller extends Controller
 {
     public function __construct(private readonly Fp3PhotoService $photos) {}
+
+    /**
+     * QR Validator's digital view — scanning the QR printed on a Cetak FP3
+     * (built as `${origin}/fp3/scan/{id}`) lands here with no login, same
+     * pattern as PublicMaintenanceReportController. Reuses Fp3RequestResource
+     * as-is (no cost/price fields to hide), same precedent as every other
+     * public QR controller in this app.
+     */
+    public function show(Fp3Request $fp3Request): Fp3RequestResource
+    {
+        return new Fp3RequestResource($fp3Request->load(['branch', 'receivedBy', 'partUsages.part']));
+    }
 
     public function store(StorePublicFp3RequestRequest $request, Branch $branch): Fp3RequestResource
     {

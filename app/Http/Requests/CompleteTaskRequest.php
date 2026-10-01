@@ -31,7 +31,7 @@ class CompleteTaskRequest extends FormRequest
         // each planned part must be accounted for, replaced (with a
         // quantity) or not (with a mandatory reason).
         if ($task && $task->partChecks()->exists()) {
-            return [
+            $rules = [
                 'notes' => ['nullable', 'string'],
                 'checks' => ['required', 'array', 'min:1'],
                 // One TaskPartCheck row is now always exactly one address
@@ -74,13 +74,28 @@ class CompleteTaskRequest extends FormRequest
                 'checks.*.finding.severity' => ['nullable', Rule::enum(FindingSeverity::class)],
                 'checks.*.finding.recommendation' => ['nullable', 'string', 'max:2000'],
             ];
+        } else {
+            $rules = [
+                'notes' => ['nullable', 'string'],
+                'part_stock_id' => ['nullable', 'integer', 'exists:part_stocks,id'],
+                'quantity_used' => ['nullable', 'integer', 'min:1', 'required_with:part_stock_id'],
+            ];
         }
 
-        return [
-            'notes' => ['nullable', 'string'],
-            'part_stock_id' => ['nullable', 'integer', 'exists:part_stocks,id'],
-            'quantity_used' => ['nullable', 'integer', 'min:1', 'required_with:part_stock_id'],
-        ];
+        // Condition-check items (Kondisi Baik/Tidak) are independent of
+        // which branch above ran — a task can carry both a part checklist
+        // and checklist items, or (a checklist-only Task Library) just this.
+        if ($task && $task->checklistItems()->exists()) {
+            $rules['checklist_items'] = ['required', 'array', 'min:1'];
+            $rules['checklist_items.*.id'] = [
+                'required', 'integer',
+                Rule::exists('task_checklist_items', 'id')->where('task_id', $task->id),
+            ];
+            $rules['checklist_items.*.condition_ok'] = ['required', 'boolean'];
+            $rules['checklist_items.*.notes'] = ['nullable', 'string', 'max:1000'];
+        }
+
+        return $rules;
     }
 
     public function withValidator(Validator $validator): void
