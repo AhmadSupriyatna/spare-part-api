@@ -80,7 +80,10 @@ class Fp3Request extends Model
             return false;
         }
 
-        return $this->due_date !== null && $this->due_date->isPast();
+        // Not isPast() — see Task::isOverdue()'s comment: due_date is
+        // midnight of the due day, and isPast() compares against the
+        // current instant, not just today's date.
+        return $this->due_date !== null && $this->due_date->lt(today());
     }
 
     /**

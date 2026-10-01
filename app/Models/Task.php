@@ -57,6 +57,11 @@ class Task extends Model
         return $this->hasMany(TaskPartCheck::class);
     }
 
+    public function checklistItems(): HasMany
+    {
+        return $this->hasMany(TaskChecklistItem::class);
+    }
+
     public function reschedules(): HasMany
     {
         return $this->hasMany(TaskReschedule::class)->latest();
@@ -83,7 +88,12 @@ class Task extends Model
             return false;
         }
 
-        if ($this->due_date !== null && $this->due_date->isPast()) {
+        // Not isPast() — due_date hydrates as midnight of the due day, so
+        // isPast() (which compares against the current instant, not just
+        // today's date) would call a task overdue the moment the clock
+        // passes midnight on its own due date, hours before the day is
+        // actually over. A strictly earlier date is what "overdue" means.
+        if ($this->due_date !== null && $this->due_date->lt(today())) {
             return true;
         }
 
