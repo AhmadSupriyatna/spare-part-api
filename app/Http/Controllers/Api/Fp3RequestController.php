@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\Fp3RequestAlreadyCompletedException;
 use App\Exceptions\PartStockNotFoundException;
+use App\Http\Controllers\Concerns\ClaimsWorkItem;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelFp3RequestRequest;
 use App\Http\Requests\CompleteFp3RequestRequest;
@@ -20,6 +21,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class Fp3RequestController extends Controller
 {
+    use ClaimsWorkItem;
+
     public function __construct(
         private readonly Fp3RequestService $fp3Requests,
         private readonly Fp3PhotoService $photos,
@@ -91,28 +94,10 @@ class Fp3RequestController extends Controller
 
     /**
      * Same claim-on-first-action rule as TaskController::ensureCanWork() —
-     * received_by plays assigned_to's role here.
+     * received_by plays assigned_to's role here. See ClaimsWorkItem.
      */
     private function ensureCanWork(Request $request, Fp3Request $fp3Request): void
     {
-        $user = $request->user();
-
-        if ($fp3Request->received_by !== null) {
-            abort_unless(
-                $fp3Request->received_by === $user->id || $user->hasRole('superadmin'),
-                403,
-                'FP3 ini sudah diklaim oleh pengguna lain.'
-            );
-
-            return;
-        }
-
-        abort_unless(
-            $user->hasAnyRole(['engineer', 'supervisor', 'superadmin']),
-            403,
-            'Hanya Supervisor dan Engineer yang bisa mengerjakan FP3.'
-        );
-
-        $fp3Request->update(['received_by' => $user->id]);
+        $this->ensureCanClaim($request, $fp3Request, 'received_by', 'FP3');
     }
 }

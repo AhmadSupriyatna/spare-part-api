@@ -9,6 +9,7 @@ use App\Exceptions\PartStockBranchMismatchException;
 use App\Exceptions\PartStockNotFoundException;
 use App\Exceptions\PartUnitAlreadyInstalledException;
 use App\Exceptions\TaskAlreadyCompletedException;
+use App\Http\Controllers\Concerns\ClaimsWorkItem;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelTaskRequest;
 use App\Http\Requests\CompleteTaskRequest;
@@ -36,6 +37,8 @@ use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
+    use ClaimsWorkItem;
+
     public function __construct(
         private readonly TaskService $tasks,
         private readonly PmSchedulingService $scheduling,
@@ -310,28 +313,11 @@ class TaskController extends Controller
      * cancel an unclaimed task claims it (assigned_to is set here), and
      * from then on only that person (or Superadmin) may act on it —
      * closes the gap where anyone could act on anyone else's claimed work.
+     * See ClaimsWorkItem — the same rule applies to Fp3Request.
      */
     private function ensureCanWork(Request $request, Task $task): void
     {
-        $user = $request->user();
-
-        if ($task->assigned_to !== null) {
-            abort_unless(
-                $task->assigned_to === $user->id || $user->hasRole('superadmin'),
-                403,
-                'Tugas ini sudah diklaim oleh pengguna lain.'
-            );
-
-            return;
-        }
-
-        abort_unless(
-            $user->hasAnyRole(['engineer', 'supervisor', 'superadmin']),
-            403,
-            'Hanya Supervisor dan Engineer yang bisa mengerjakan WO.'
-        );
-
-        $task->update(['assigned_to' => $user->id]);
+        $this->ensureCanClaim($request, $task, 'assigned_to', 'WO');
     }
 
     public function destroy(Task $task): Response
