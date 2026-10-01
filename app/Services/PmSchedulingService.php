@@ -152,12 +152,20 @@ class PmSchedulingService
             ->where('is_active', true)
             ->where('schedule_type', 'calendar')
             ->whereIn('interval_days', [7, 30])
-            // Phase 3B "Asset Outside Line": a Task Library recipe on an
-            // outside-line asset has no equipment.machine.line to match
-            // through, so it also matches on the asset's own branch_id.
-            ->where(function ($q) use ($branch) {
-                $q->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branch->id))
-                    ->orWhereHas('equipment', fn ($q2) => $q2->where('branch_id', $branch->id));
+            // 3-way branch resolution (same as BudgetForecastService::
+            // whereEquipmentInBranch()): equipment directly on the branch
+            // (standalone asset), equipment under a Machine that's itself
+            // outside a Line (machine.branch_id), or equipment under a
+            // Machine that belongs to a Line (machine.line.branch_id). A
+            // 2-way check here previously missed the middle case, silently
+            // never auto-scheduling recipes registered on an outside-line
+            // Machine's equipment.
+            ->whereHas('equipment', function ($q) use ($branch) {
+                $q->where('branch_id', $branch->id)
+                    ->orWhereHas('machine', function ($q2) use ($branch) {
+                        $q2->where('branch_id', $branch->id)
+                            ->orWhereHas('line', fn ($q3) => $q3->where('branch_id', $branch->id));
+                    });
             })
             ->get();
 

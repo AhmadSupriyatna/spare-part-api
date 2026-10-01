@@ -54,12 +54,31 @@ class TaskController extends Controller
                 ->whereHas(
                     'task',
                     fn ($q) => $q->where(fn ($q2) => $q2->whereNotNull('task_library_id')->orWhereHas('partChecks'))
-                        ->whereHas('equipment.machine.line', fn ($q2) => $q2->where('branch_id', $branch->id))
+                        ->where(fn ($q2) => $this->whereEquipmentInBranch($q2, $branch))
                 )
                 ->with(['task.equipment', 'rescheduledBy'])
                 ->latest()
                 ->get()
         );
+    }
+
+    /**
+     * Same 3-way branch resolution as BudgetForecastService::
+     * whereEquipmentInBranch() / PmSchedulingService::ensureRecurringSchedules()
+     * — equipment directly on the branch (standalone asset), equipment under
+     * an outside-line Machine, or equipment under a Line-attached Machine. A
+     * 2-level `equipment.machine.line` check alone silently drops every
+     * "Mesin Luar Line" task from the calendar/list/reschedule history.
+     */
+    private function whereEquipmentInBranch($query, Branch $branch)
+    {
+        return $query->whereHas('equipment', function ($q) use ($branch) {
+            $q->where('branch_id', $branch->id)
+                ->orWhereHas('machine', function ($q2) use ($branch) {
+                    $q2->where('branch_id', $branch->id)
+                        ->orWhereHas('line', fn ($q3) => $q3->where('branch_id', $branch->id));
+                });
+        });
     }
 
     /**
@@ -78,8 +97,7 @@ class TaskController extends Controller
         $this->lifetime->autoScheduleAllAtRisk($branch->id);
 
         return TaskResource::collection(
-            Task::query()
-                ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
+            $this->whereEquipmentInBranch(Task::query(), $branch)
                 ->with(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part', 'checklistItems'])
                 ->orderByDesc('due_date')
                 ->get()
