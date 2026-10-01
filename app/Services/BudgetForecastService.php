@@ -18,6 +18,33 @@ class BudgetForecastService
     private const WEEKS_PER_YEAR = 52;
 
     /**
+     * Request-scoped memoization — BudgetForecastService is resolved once
+     * per request (constructor-injected into BudgetController, same
+     * instance threaded through the whole method call), so these caches
+     * never leak across requests. Added because BudgetController::index()
+     * calls lineBreakdown() + machineBreakdown() for every item of every
+     * budget in the list — each of those independently recomputed rates
+     * and re-fetched the exact same PartInstallation rows, so the same
+     * (branch, part) pair triggered its unit cost / avg weekly hours /
+     * inspection count / installation list queries twice per item, and
+     * again for every other item or budget referencing that same part
+     * (same catalog part commonly appears across several years/strategies).
+     * None of these change mid-request, so caching by key is exact, not an
+     * approximation.
+     */
+    private array $unitCostCache = [];
+
+    private array $avgWeeklyHoursCache = [];
+
+    private array $inspectionsPerYearCache = [];
+
+    private array $activeInstallationCountCache = [];
+
+    private array $installationsCache = [];
+
+    private array $ratesCache = [];
+
+    /**
      * Matches an already-built PartInstallation query to a branch — three
      * ways an equipment can resolve to one, mirroring
      * Equipment::resolvedBranchId(): production via
@@ -166,7 +193,9 @@ class BudgetForecastService
      */
     private function inspectionsPerYearFor(Branch $branch, Part $part): int
     {
-        return $this->whereEquipmentInBranch(
+        $key = "{$branch->id}:{$part->id}";
+
+        return $this->inspectionsPerYearCache[$key] ??= $this->whereEquipmentInBranch(
             Task::query()
                 ->whereHas('partChecks', fn (Builder $q) => $q->where('part_id', $part->id))
                 ->whereBetween('due_date', [now()->subYear(), now()]),
@@ -186,15 +215,33 @@ class BudgetForecastService
      */
     private function ratesForBudgetItem(Branch $branch, BudgetItem $item): array
     {
-        $budget = $item->budget;
-        $part = $item->part;
-        $priceIncreasePercent = (float) $budget->global_price_increase_percent;
+        return $this->ratesCache[$item->id] ??= (function () use ($branch, $item) {
+            $budget = $item->budget;
+            $part = $item->part;
+            $priceIncreasePercent = (float) $budget->global_price_increase_percent;
 
-        return match ($budget->replacement_strategy) {
-            PartReplacementStrategy::LifeBased => $this->ratesFor($branch, $part, (float) $budget->global_lifetime_percent, $priceIncreasePercent),
-            PartReplacementStrategy::FailureBased => $this->failureBasedRatesFor($branch, $part, (float) $item->estimated_failure_count_per_year, $priceIncreasePercent),
-            PartReplacementStrategy::Scheduled => $this->scheduledRatesFor($branch, $part, (float) $item->replacement_probability_percent, $priceIncreasePercent),
-        };
+            return match ($budget->replacement_strategy) {
+                PartReplacementStrategy::LifeBased => $this->ratesFor($branch, $part, (float) $budget->global_lifetime_percent, $priceIncreasePercent),
+                PartReplacementStrategy::FailureBased => $this->failureBasedRatesFor($branch, $part, (float) $item->estimated_failure_count_per_year, $priceIncreasePercent),
+                PartReplacementStrategy::Scheduled => $this->scheduledRatesFor($branch, $part, (float) $item->replacement_probability_percent, $priceIncreasePercent),
+            };
+        })();
+    }
+
+    /**
+     * The shared fetch behind lineBreakdown()/machineBreakdown() — both
+     * group the exact same PartInstallation rows, just by a different key,
+     * so there's no reason to hit the database twice for the same
+     * (branch, part).
+     */
+    private function installationsFor(Branch $branch, BudgetItem $item)
+    {
+        $key = "{$branch->id}:{$item->part_id}";
+
+        return $this->installationsCache[$key] ??= $this->whereEquipmentInBranch(
+            PartInstallation::query()->where('part_id', $item->part_id)->whereNull('removed_at'),
+            $branch->id
+        )->with('equipment.machine.line')->get();
     }
 
     /**
@@ -260,12 +307,7 @@ class BudgetForecastService
     {
         $rates = $this->ratesForBudgetItem($branch, $item);
 
-        $installations = $this->whereEquipmentInBranch(
-            PartInstallation::query()->where('part_id', $item->part_id)->whereNull('removed_at'),
-            $branch->id
-        )
-            ->with('equipment.machine.line')
-            ->get()
+        $installations = $this->installationsFor($branch, $item)
             ->groupBy(fn (PartInstallation $installation) => $installation->equipment->machine?->line_id);
 
         $breakdown = [];
@@ -300,12 +342,7 @@ class BudgetForecastService
     {
         $rates = $this->ratesForBudgetItem($branch, $item);
 
-        $installations = $this->whereEquipmentInBranch(
-            PartInstallation::query()->where('part_id', $item->part_id)->whereNull('removed_at'),
-            $branch->id
-        )
-            ->with('equipment.machine.line')
-            ->get()
+        $installations = $this->installationsFor($branch, $item)
             ->groupBy(fn (PartInstallation $installation) => $installation->equipment->machine_id);
 
         $breakdown = [];
@@ -336,7 +373,9 @@ class BudgetForecastService
 
     private function activeInstallationCount(Branch $branch, Part $part): int
     {
-        return $this->whereEquipmentInBranch(
+        $key = "{$branch->id}:{$part->id}";
+
+        return $this->activeInstallationCountCache[$key] ??= $this->whereEquipmentInBranch(
             PartInstallation::query()->where('part_id', $part->id)->whereNull('removed_at'),
             $branch->id
         )->count();
@@ -353,25 +392,31 @@ class BudgetForecastService
      */
     private function averageWeeklyOperatingHoursFor(Branch $branch, Part $part): int
     {
-        $lines = $this->whereEquipmentInBranch(
-            PartInstallation::query()->where('part_id', $part->id)->whereNull('removed_at'),
-            $branch->id
-        )
-            ->with('equipment.machine.line')
-            ->get()
-            ->map(fn (PartInstallation $installation) => $installation->equipment->machine?->line)
-            ->filter()
-            ->unique('id');
+        $key = "{$branch->id}:{$part->id}";
 
-        if ($lines->isEmpty()) {
-            return CompanySetting::current()->avg_weekly_operating_hours ?: 85;
-        }
+        return $this->avgWeeklyHoursCache[$key] ??= (function () use ($branch, $part) {
+            $lines = $this->whereEquipmentInBranch(
+                PartInstallation::query()->where('part_id', $part->id)->whereNull('removed_at'),
+                $branch->id
+            )
+                ->with('equipment.machine.line')
+                ->get()
+                ->map(fn (PartInstallation $installation) => $installation->equipment->machine?->line)
+                ->filter()
+                ->unique('id');
 
-        return (int) round($lines->avg(fn (ProductionLine $line) => $line->effectiveAvgWeeklyOperatingHours()));
+            if ($lines->isEmpty()) {
+                return CompanySetting::current()->avg_weekly_operating_hours ?: 85;
+            }
+
+            return (int) round($lines->avg(fn (ProductionLine $line) => $line->effectiveAvgWeeklyOperatingHours()));
+        })();
     }
 
     private function unitCostFor(Branch $branch, Part $part): string
     {
-        return (string) ($branch->partStocks()->where('part_id', $part->id)->value('unit_cost') ?? $part->price);
+        $key = "{$branch->id}:{$part->id}";
+
+        return $this->unitCostCache[$key] ??= (string) ($branch->partStocks()->where('part_id', $part->id)->value('unit_cost') ?? $part->price);
     }
 }
