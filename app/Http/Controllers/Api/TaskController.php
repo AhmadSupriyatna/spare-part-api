@@ -19,8 +19,11 @@ use App\Http\Resources\TaskRescheduleResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Branch;
 use App\Models\Equipment;
+use App\Models\Machine;
+use App\Models\ProductionLine;
 use App\Models\Task;
 use App\Models\TaskReschedule;
+use App\Services\MaintenanceReportService;
 use App\Services\PartLifetimeService;
 use App\Services\PmSchedulingService;
 use App\Services\TaskService;
@@ -28,6 +31,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
@@ -36,6 +40,7 @@ class TaskController extends Controller
         private readonly TaskService $tasks,
         private readonly PmSchedulingService $scheduling,
         private readonly PartLifetimeService $lifetime,
+        private readonly MaintenanceReportService $reports,
     ) {}
 
     /**
@@ -75,7 +80,7 @@ class TaskController extends Controller
         return TaskResource::collection(
             Task::query()
                 ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
-                ->with(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part'])
+                ->with(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partChecks.part', 'checklistItems'])
                 ->orderByDesc('due_date')
                 ->get()
         );
@@ -85,9 +90,40 @@ class TaskController extends Controller
     {
         return TaskResource::collection(
             $equipment->tasks()
-                ->with(['equipment.machine.line.branch', 'assignee', 'partStock.part', 'partChecks.part'])
+                ->with(['equipment.machine.line.branch', 'assignee', 'partStock.part', 'partChecks.part', 'checklistItems'])
                 ->latest('due_date')
                 ->get()
+        );
+    }
+
+    /**
+     * Laporan Pemeriksaan Mesin — every Task (regular PM or Part Lifetime
+     * auto-scheduled) whose equipment sits under this Machine and whose
+     * due_date falls within [from, to] — a week or a month, decided by the
+     * caller. Purely a read-time grouping: nothing is created, moved, or
+     * persisted here, and each Task keeps its own id/"WO #" — see
+     * MachineController for the read-access pattern this mirrors.
+     */
+    public function woReportForMachine(Request $request, Machine $machine): AnonymousResourceCollection
+    {
+        $data = $request->validate(['from' => ['required', 'date'], 'to' => ['required', 'date', 'after_or_equal:from']]);
+
+        return TaskResource::collection(
+            $this->reports->forMachine($machine, Carbon::parse($data['from'])->startOfDay(), Carbon::parse($data['to'])->endOfDay())
+        );
+    }
+
+    /**
+     * Same report as woReportForMachine(), aggregated across every Machine
+     * under this Line instead of just one — see that method's docblock for
+     * what "report" means here.
+     */
+    public function woReportForLine(Request $request, ProductionLine $line): AnonymousResourceCollection
+    {
+        $data = $request->validate(['from' => ['required', 'date'], 'to' => ['required', 'date', 'after_or_equal:from']]);
+
+        return TaskResource::collection(
+            $this->reports->forLine($line, Carbon::parse($data['from'])->startOfDay(), Carbon::parse($data['to'])->endOfDay())
         );
     }
 
@@ -129,7 +165,7 @@ class TaskController extends Controller
                         $q->orWhereNull('assigned_to');
                     }
                 })
-                ->with(['equipment.machine.line.branch', 'assignee', 'partStock.part', 'partChecks.part'])
+                ->with(['equipment.machine.line.branch', 'assignee', 'partStock.part', 'partChecks.part', 'checklistItems'])
                 // Active work (pending/in_progress) always floats above
                 // completed/cancelled history, but within that group it's
                 // purely nearest-due-date-first — status doesn't jump a
@@ -161,6 +197,7 @@ class TaskController extends Controller
             'taskLibrary',
             'partStock.part',
             'partChecks.part',
+            'checklistItems',
         ]));
     }
 
@@ -220,6 +257,7 @@ class TaskController extends Controller
                 partStockId: $data['part_stock_id'] ?? null,
                 quantityUsed: $data['quantity_used'] ?? null,
                 checks: $data['checks'] ?? null,
+                checklistItems: $data['checklist_items'] ?? null,
             );
         } catch (
             PartStockNotFoundException|
@@ -234,7 +272,7 @@ class TaskController extends Controller
             return response()->json(['message' => $e->getMessage()], 409);
         }
 
-        return new TaskResource($updated->load(['partStock.part', 'partChecks.part']));
+        return new TaskResource($updated->load(['partStock.part', 'partChecks.part', 'checklistItems']));
     }
 
     public function cancel(CancelTaskRequest $request, Task $task): TaskResource
