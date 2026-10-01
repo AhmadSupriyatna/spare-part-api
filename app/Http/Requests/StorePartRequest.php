@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\PartMinimumStockStrategy;
 use App\Enums\PartReplacementStrategy;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -18,10 +19,12 @@ class StorePartRequest extends FormRequest
     {
         // replacement_strategy is deliberately NOT defaulted here — there is
         // no safe catch-all strategy (see PartReplacementStrategy), so a new
-        // Part must have one explicitly chosen. The 'required' rule below is
-        // what actually enforces that; this only fills in is_active.
+        // Part must have one explicitly chosen. minimum_stock_strategy does
+        // have a safe default (see PartMinimumStockStrategy), so it's
+        // filled in here alongside is_active.
         $this->mergeIfMissing([
             'is_active' => true,
+            'minimum_stock_strategy' => PartMinimumStockStrategy::Standard->value,
         ]);
     }
 
@@ -38,6 +41,7 @@ class StorePartRequest extends FormRequest
             'price' => ['sometimes', 'numeric', 'min:0'],
             'estimated_lifetime_hours' => ['nullable', 'integer', 'min:1'],
             'replacement_strategy' => ['required', Rule::enum(PartReplacementStrategy::class)],
+            'minimum_stock_strategy' => ['sometimes', Rule::enum(PartMinimumStockStrategy::class)],
             'image' => ['nullable', 'image', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
         ];

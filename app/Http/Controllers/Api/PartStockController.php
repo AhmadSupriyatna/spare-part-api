@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\PartMinimumStockStrategy;
 use App\Enums\TaskStatus;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
@@ -73,13 +74,16 @@ class PartStockController extends Controller
      *     until the checklist is actually completed).
      *
      * active_installation_count: how many of this branch's equipment
-     * currently have this part installed — the badge logic below compares
-     * against this instead of a manually-set minimum_stock, since "enough
+     * currently have this part installed — the Kritis/Peringatan badge
+     * below compares against this rather than minimum_stock, since "enough
      * spares to cover every unit that could fail" is the actually relevant
-     * question for a spare-parts inventory (minimum_stock/reorder_point
-     * still exist and still drive StockAlertService's separate reorder-
-     * request automation — this replaces only the Kritis/Peringatan
-     * display badge, not that unrelated process).
+     * question for a spare-parts inventory.
+     *
+     * minimum_stock: purely a displayed reference number (not part of the
+     * badge logic above), computed per Part's minimum_stock_strategy —
+     * "installed" uses this branch's active_installation_count for that
+     * part, "standard" uses the branch's own default_minimum_stock ("
+     * Standar Minimum Plant", set on the Plant/Branch record).
      *
      * available_quantity = quantity_on_hand - reserved_quantity (never
      * negative). is_critical: available < reserved (can't even cover
@@ -94,6 +98,7 @@ class PartStockController extends Controller
             return;
         }
 
+        $defaultMinimumStock = Branch::whereKey($branchId)->value('default_minimum_stock') ?? 0;
         $openStatuses = [TaskStatus::Pending, TaskStatus::InProgress];
         $partIds = $stocks->pluck('part_id')->unique();
 
@@ -128,16 +133,21 @@ class PartStockController extends Controller
             ->groupBy('part_id')
             ->pluck('qty', 'part_id');
 
-        $stocks->each(function (PartStock $stock) use ($direct, $checklist, $installed) {
+        $stocks->each(function (PartStock $stock) use ($direct, $checklist, $installed, $defaultMinimumStock) {
             $reserved = (int) ($direct[$stock->id] ?? 0) + (int) ($checklist[$stock->part_id] ?? 0);
             $installedCount = (int) ($installed[$stock->part_id] ?? 0);
             $available = max(0, $stock->quantity_on_hand - $reserved);
 
             $isCritical = $stock->quantity_on_hand < $reserved;
 
+            $minimumStock = $stock->part?->minimum_stock_strategy === PartMinimumStockStrategy::Installed
+                ? $installedCount
+                : $defaultMinimumStock;
+
             $stock->setAttribute('reserved_quantity', $reserved);
             $stock->setAttribute('active_installation_count', $installedCount);
             $stock->setAttribute('available_quantity', $available);
+            $stock->setAttribute('minimum_stock', $minimumStock);
             $stock->setAttribute('is_critical', $isCritical);
             $stock->setAttribute('is_warning', ! $isCritical && $available < $installedCount);
         });

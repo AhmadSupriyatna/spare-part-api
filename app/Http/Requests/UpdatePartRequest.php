@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\PartMinimumStockStrategy;
 use App\Enums\PartReplacementStrategy;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -30,6 +31,7 @@ class UpdatePartRequest extends FormRequest
             'price' => ['sometimes', 'numeric', 'min:0'],
             'estimated_lifetime_hours' => ['nullable', 'integer', 'min:1'],
             'replacement_strategy' => ['sometimes', 'required', Rule::enum(PartReplacementStrategy::class)],
+            'minimum_stock_strategy' => ['sometimes', Rule::enum(PartMinimumStockStrategy::class)],
             'image' => ['nullable', 'image', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
         ];

@@ -17,8 +17,6 @@ use Illuminate\Support\Facades\DB;
  */
 class StockMovementService
 {
-    public function __construct(private readonly StockAlertService $alerts) {}
-
     /**
      * @param  int  $quantityChange  Positive to add stock, negative to remove it.
      *
@@ -78,8 +76,6 @@ class StockMovementService
                 'user_id' => $user?->id,
                 'occurred_at' => now(),
             ]);
-
-            $this->alerts->evaluate($locked);
 
             return $ledgerEntry;
         });

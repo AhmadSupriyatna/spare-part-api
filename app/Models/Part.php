@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PartMinimumStockStrategy;
 use App\Enums\PartReplacementStrategy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,7 @@ class Part extends Model
         'price',
         'estimated_lifetime_hours',
         'replacement_strategy',
+        'minimum_stock_strategy',
         'image_path',
         'is_active',
     ];
@@ -30,6 +32,7 @@ class Part extends Model
             'price' => 'decimal:2',
             'estimated_lifetime_hours' => 'integer',
             'replacement_strategy' => PartReplacementStrategy::class,
+            'minimum_stock_strategy' => PartMinimumStockStrategy::class,
             'is_active' => 'boolean',
         ];
     }

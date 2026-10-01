@@ -8,8 +8,6 @@ use App\Models\PartInstallation;
 use App\Models\PartRepair;
 use App\Models\PartReplacementRequest;
 use App\Models\PartUnitActionRequest;
-use App\Models\ReorderRequest;
-use App\Models\StockAlert;
 use App\Models\StockLedger;
 use App\Models\Task;
 use App\Models\TaskLibrary;
@@ -172,8 +170,6 @@ class DatabaseBackupService
         $partRepairs = PartRepair::whereIn('part_installation_id', $partInstallations->pluck('id'))->get();
         $partUnitActionRequests = PartUnitActionRequest::where('branch_id', $branch->id)->get();
         $budgets = $branch->budgets()->with('items')->get();
-        $stockAlerts = StockAlert::whereIn('part_stock_id', $partStockIds)->get();
-        $reorderRequests = ReorderRequest::whereIn('part_stock_id', $partStockIds)->get();
         $stockLedger = StockLedger::whereIn('part_stock_id', $partStockIds)->get();
 
         $toArray = fn (Collection $items) => $items->map(fn ($item) => $item->toArray())->values()->all();
@@ -200,8 +196,6 @@ class DatabaseBackupService
                 'part_repairs' => $toArray($partRepairs),
                 'part_unit_action_requests' => $toArray($partUnitActionRequests),
                 'budgets' => $toArray($budgets),
-                'stock_alerts' => $toArray($stockAlerts),
-                'reorder_requests' => $toArray($reorderRequests),
                 'stock_ledger' => $toArray($stockLedger),
             ],
         ];

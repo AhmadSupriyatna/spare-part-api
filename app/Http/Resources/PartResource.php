@@ -25,6 +25,7 @@ class PartResource extends JsonResource
             'price' => $this->price,
             'estimated_lifetime_hours' => $this->estimated_lifetime_hours,
             'replacement_strategy' => $this->replacement_strategy->value,
+            'minimum_stock_strategy' => $this->minimum_stock_strategy->value,
             'image_url' => $this->imageUrl(),
             'is_active' => $this->is_active,
             'stocks' => PartStockResource::collection($this->whenLoaded('stocks')),

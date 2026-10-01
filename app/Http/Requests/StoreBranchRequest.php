@@ -27,6 +27,7 @@ class StoreBranchRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'address' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
+            'default_minimum_stock' => ['sometimes', 'integer', 'min:0'],
         ];
     }
 }

@@ -18,12 +18,12 @@ use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Inventory Workspace's Kritis/Peringatan/Normal badge — redefined away from
- * minimum_stock/reorder_point (still used, unchanged, by StockAlertService's
- * separate reorder-request automation) to two comparisons that actually
- * answer "do we have enough spares": Kritis when available stock can't even
- * cover what's already committed to open WOs, Peringatan when it couldn't
- * cover every currently-installed unit failing at once.
+ * Inventory Workspace's Kritis/Peringatan/Normal badge — two comparisons
+ * that actually answer "do we have enough spares": Kritis when available
+ * stock can't even cover what's already committed to open WOs, Peringatan
+ * when it couldn't cover every currently-installed unit failing at once.
+ * minimum_stock is a separate, purely-displayed number (see
+ * PartMinimumStockStrategyTest) that never drives either badge.
  */
 class PartStockStatusBadgeTest extends TestCase
 {
@@ -54,8 +54,6 @@ class PartStockStatusBadgeTest extends TestCase
             'part_id' => $this->part->id,
             'branch_id' => $this->branch->id,
             'quantity_on_hand' => 5,
-            'minimum_stock' => 0,
-            'reorder_point' => 0,
         ]);
 
         foreach (UserRole::cases() as $role) {
@@ -127,14 +125,17 @@ class PartStockStatusBadgeTest extends TestCase
         $this->assertSame(1, $data['active_installation_count']);
     }
 
-    public function test_minimum_stock_and_reorder_point_no_longer_drive_the_badge(): void
+    public function test_minimum_stock_never_drives_the_badge(): void
     {
-        // On hand is far below both thresholds, but nothing is reserved or installed.
-        $this->stock->update(['minimum_stock' => 100, 'reorder_point' => 50]);
+        // Standard strategy (the factory/DB default) with a high plant
+        // default — on hand is far below it, but nothing is reserved or
+        // installed, so neither badge should fire.
+        $this->branch->update(['default_minimum_stock' => 100]);
 
         $data = $this->fetchStock();
 
         $this->assertFalse($data['is_critical']);
         $this->assertFalse($data['is_warning']);
+        $this->assertSame(100, $data['minimum_stock']);
     }
 }

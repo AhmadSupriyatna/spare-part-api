@@ -16,9 +16,6 @@ class PartStock extends Model
         'branch_id',
         'supplier_id',
         'location_id',
-        'minimum_stock',
-        'reorder_point',
-        'reorder_quantity',
         'unit_cost',
         'quantity_on_hand',
     ];
@@ -26,9 +23,6 @@ class PartStock extends Model
     protected function casts(): array
     {
         return [
-            'minimum_stock' => 'integer',
-            'reorder_point' => 'integer',
-            'reorder_quantity' => 'integer',
             'unit_cost' => 'decimal:2',
             'quantity_on_hand' => 'integer',
         ];
@@ -57,15 +51,5 @@ class PartStock extends Model
     public function ledgerEntries(): HasMany
     {
         return $this->hasMany(StockLedger::class);
-    }
-
-    public function alerts(): HasMany
-    {
-        return $this->hasMany(StockAlert::class);
-    }
-
-    public function reorderRequests(): HasMany
-    {
-        return $this->hasMany(ReorderRequest::class);
     }
 }

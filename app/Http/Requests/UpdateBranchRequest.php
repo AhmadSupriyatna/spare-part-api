@@ -23,6 +23,7 @@ class UpdateBranchRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'address' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],
+            'default_minimum_stock' => ['sometimes', 'integer', 'min:0'],
         ];
     }
 }

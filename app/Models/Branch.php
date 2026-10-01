@@ -17,12 +17,14 @@ class Branch extends Model
         'name',
         'address',
         'is_active',
+        'default_minimum_stock',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'default_minimum_stock' => 'integer',
         ];
     }
 
