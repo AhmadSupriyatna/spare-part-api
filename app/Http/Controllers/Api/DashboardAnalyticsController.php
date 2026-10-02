@@ -9,9 +9,11 @@ use App\Models\Budget;
 use App\Models\Equipment;
 use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
+use App\Models\PartReplacementRequestItem;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
+use App\Models\TaskPartCheck;
 use App\Services\BudgetRealizationService;
 use App\Services\PartLifetimeService;
 use Illuminate\Database\Eloquent\Builder;
@@ -58,6 +60,7 @@ class DashboardAnalyticsController extends Controller
             'stock_movement_trend' => $this->stockMovementTrend($branch),
             'installation_sunburst' => $this->installationSunburst($branch),
             'cost_sunburst' => $this->costSunburst($branch),
+            'scheduled_vs_failure_trend' => $this->scheduledVsFailureTrend($branch),
         ]]);
     }
 
@@ -621,8 +624,11 @@ class DashboardAnalyticsController extends Controller
 
     /**
      * "Cost per Line/Equipment" sunburst — same actual-spend source as
-     * costHeatmap() (TYPE_ISSUE ledger rows, last 12 months), but kept flat
-     * per Line/Machine/Equipment/Part leaf instead of pre-aggregated to
+     * costHeatmap() (TYPE_ISSUE ledger rows), but scoped to the current
+     * calendar year (Jan 1 - today) instead of a rolling 12 months — this is
+     * the one chart on this dashboard meant to read as "spend so far this
+     * year", not a trailing window — and kept flat per
+     * Line/Machine/Equipment/Part leaf instead of pre-aggregated to
      * Line/Machine, so the frontend can drill the sunburst past Machine into
      * Equipment and Part, the same four rings as installationSunburst().
      *
@@ -632,7 +638,7 @@ class DashboardAnalyticsController extends Controller
     {
         $entries = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->where('occurred_at', '>=', now()->startOfMonth()->subMonths(11))
+            ->whereYear('occurred_at', now()->year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
             ->whereNotNull('unit_cost')
             ->with([
@@ -675,5 +681,52 @@ class DashboardAnalyticsController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * "Tren Scheduled vs Failure" — every PartInstallation in the last 12
+     * months, classified by HOW it was created rather than re-using
+     * failureTrend()'s counts (that failure_count is breakdown *reports*,
+     * this is actually-completed installs): a TaskPartCheck pointing its
+     * part_installation_id at the row means a PM task replaced it
+     * ("scheduled"); a PartReplacementRequestItem pointing its
+     * new_installation_id at the row means the public breakdown/QR flow
+     * created it ("failure"). Both creation paths go through
+     * PartLifecycleService::install(), so the install row itself carries no
+     * marker — the marker lives on whichever of those two linking tables has
+     * a row, and they're mutually exclusive by construction. A row matching
+     * neither (manual/legacy install) counts toward neither series.
+     *
+     * @return list<array{month: string, scheduled_count: int, failure_count: int}>
+     */
+    private function scheduledVsFailureTrend(Branch $branch): array
+    {
+        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
+        $since = now()->startOfMonth()->subMonths(11);
+
+        $installations = $this->scopeEquipmentToBranch(
+            PartInstallation::query()->where('installed_at', '>=', $since),
+            $branch->id
+        )->get(['id', 'installed_at']);
+
+        $installationIds = $installations->pluck('id');
+        $scheduledIds = TaskPartCheck::query()->whereIn('part_installation_id', $installationIds)->pluck('part_installation_id')->flip();
+        $failureIds = PartReplacementRequestItem::query()->whereIn('new_installation_id', $installationIds)->pluck('new_installation_id')->flip();
+
+        $scheduledByMonth = $installations
+            ->filter(fn (PartInstallation $i) => isset($scheduledIds[$i->id]))
+            ->groupBy(fn (PartInstallation $i) => $i->installed_at->format('Y-m'))
+            ->map(fn (Collection $rows) => $rows->count());
+
+        $failureByMonth = $installations
+            ->filter(fn (PartInstallation $i) => isset($failureIds[$i->id]))
+            ->groupBy(fn (PartInstallation $i) => $i->installed_at->format('Y-m'))
+            ->map(fn (Collection $rows) => $rows->count());
+
+        return $months->map(fn ($month) => [
+            'month' => $month,
+            'scheduled_count' => (int) ($scheduledByMonth[$month] ?? 0),
+            'failure_count' => (int) ($failureByMonth[$month] ?? 0),
+        ])->values()->all();
     }
 }

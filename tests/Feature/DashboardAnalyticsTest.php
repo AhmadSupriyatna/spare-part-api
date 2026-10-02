@@ -13,11 +13,13 @@ use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
+use App\Models\PartReplacementRequestItem;
 use App\Models\PartStock;
 use App\Models\ProductionLine;
 use App\Models\StockLedger;
 use App\Models\Task;
 use App\Models\TaskLibrary;
+use App\Models\TaskPartCheck;
 use App\Models\User;
 use App\Services\PartLifecycleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -624,5 +626,99 @@ class DashboardAnalyticsTest extends TestCase
         $this->assertSame('Mesin Press', $row['machine_name']);
         $this->assertSame('Pompa 1', $row['equipment_name']);
         $this->assertSame('100000.00', $row['cost']);
+    }
+
+    public function test_cost_sunburst_excludes_spend_from_a_previous_calendar_year(): void
+    {
+        $part = Part::factory()->create(['name' => 'Gear Reducer 1:20']);
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+        $task = Task::factory()->create();
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -1,
+            'balance_after' => 9,
+            'unit_cost' => '50000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now()->subYear(),
+        ]);
+
+        $rows = collect($this->fetchAnalytics()->json('data.cost_sunburst'));
+
+        $this->assertNull($rows->firstWhere('part_name', 'Gear Reducer 1:20'));
+    }
+
+    public function test_scheduled_vs_failure_trend_counts_a_pm_driven_install_as_scheduled(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+        $task = Task::factory()->create(['equipment_id' => $equipment->id]);
+
+        $installation = PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $part->id, 'installed_at' => now()]);
+
+        TaskPartCheck::create([
+            'task_id' => $task->id,
+            'part_id' => $part->id,
+            'quantity_planned' => 1,
+            'is_replaced' => true,
+            'quantity_used' => 1,
+            'part_installation_id' => $installation->id,
+        ]);
+
+        $trend = collect($this->fetchAnalytics()->json('data.scheduled_vs_failure_trend'))->keyBy('month');
+        $thisMonth = $trend[now()->format('Y-m')];
+
+        $this->assertSame(1, $thisMonth['scheduled_count']);
+        $this->assertSame(0, $thisMonth['failure_count']);
+    }
+
+    public function test_scheduled_vs_failure_trend_counts_a_breakdown_driven_install_as_failure(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+
+        $installation = PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $part->id, 'installed_at' => now()]);
+
+        $replacementRequest = PartReplacementRequest::create([
+            'part_id' => $part->id,
+            'equipment_id' => $equipment->id,
+            'event_type' => 'breakdown',
+            'status' => 'approved',
+            'reason' => 'Rusak',
+            'requested_by_name' => 'Teknisi',
+            'quantity_used' => 1,
+        ]);
+        PartReplacementRequestItem::create([
+            'replacement_request_id' => $replacementRequest->id,
+            'new_installation_id' => $installation->id,
+        ]);
+
+        $trend = collect($this->fetchAnalytics()->json('data.scheduled_vs_failure_trend'))->keyBy('month');
+        $thisMonth = $trend[now()->format('Y-m')];
+
+        $this->assertSame(0, $thisMonth['scheduled_count']);
+        $this->assertSame(1, $thisMonth['failure_count']);
+    }
+
+    public function test_scheduled_vs_failure_trend_does_not_count_a_manual_install_in_either_series(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $part->id, 'installed_at' => now()]);
+
+        $trend = collect($this->fetchAnalytics()->json('data.scheduled_vs_failure_trend'))->keyBy('month');
+        $thisMonth = $trend[now()->format('Y-m')];
+
+        $this->assertSame(0, $thisMonth['scheduled_count']);
+        $this->assertSame(0, $thisMonth['failure_count']);
     }
 }
