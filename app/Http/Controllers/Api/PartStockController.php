@@ -205,7 +205,7 @@ class PartStockController extends Controller
     }
 
     /**
-     * @param  array{quantity: int, total_price: float|string, supplier_id?: int|null, notes?: string|null}  $data
+     * @param  array{quantity: int, total_price: float|string, supplier_id?: int|null, notes?: string|null, arrived_at?: string|null}  $data
      * @return Collection<int, PartUnit> newly created units — empty unless this Part has_passport.
      */
     private function recordReceiving(PartStock $partStock, array $data, ?User $user): Collection
@@ -236,7 +236,7 @@ class PartStockController extends Controller
             return new Collection;
         }
 
-        return $this->lifecycle->receiveUnits($partStock->part, $data['quantity'])->loadMissing('part');
+        return $this->lifecycle->receiveUnits($partStock->part, $data['quantity'], $data['arrived_at'] ?? null)->loadMissing('part');
     }
 
     public function adjust(AdjustStockRequest $request, PartStock $partStock): JsonResponse

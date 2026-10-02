@@ -71,6 +71,46 @@ class PartPassportTest extends TestCase
         $this->assertSame(3, $part->units()->where('status', PartUnitStatus::Available->value)->count());
     }
 
+    public function test_receiving_stock_accepts_a_manual_arrival_date_for_backfilling_past_receipts(): void
+    {
+        $part = Part::factory()->create(['has_passport' => true]);
+        $stock = PartStock::factory()->create([
+            'part_id' => $part->id,
+            'branch_id' => $this->branch->id,
+            'quantity_on_hand' => 0,
+        ]);
+
+        $response = $this->actingAs($this->admin)->postJson("/api/part-stocks/{$stock->id}/receive", [
+            'quantity' => 2,
+            'total_price' => 200000,
+            'arrived_at' => '2026-01-15',
+        ]);
+
+        $response->assertOk();
+        $newUnits = $response->json('new_units');
+        $this->assertSame('2026-01-15T00:00:00.000000Z', $newUnits[0]['arrived_at']);
+        $this->assertSame($newUnits[0]['arrived_at'], $newUnits[1]['arrived_at']);
+    }
+
+    public function test_receiving_stock_rejects_a_future_arrival_date(): void
+    {
+        $part = Part::factory()->create(['has_passport' => true]);
+        $stock = PartStock::factory()->create([
+            'part_id' => $part->id,
+            'branch_id' => $this->branch->id,
+            'quantity_on_hand' => 0,
+        ]);
+
+        $response = $this->actingAs($this->admin)->postJson("/api/part-stocks/{$stock->id}/receive", [
+            'quantity' => 1,
+            'total_price' => 100000,
+            'arrived_at' => now()->addDay()->toDateString(),
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('arrived_at');
+    }
+
     public function test_receiving_stock_for_a_non_passport_part_creates_no_units(): void
     {
         $part = Part::factory()->create(['has_passport' => false]);

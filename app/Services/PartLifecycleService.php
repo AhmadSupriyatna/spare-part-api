@@ -15,6 +15,7 @@ use App\Models\PartRepair;
 use App\Models\PartUnit;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -94,17 +95,21 @@ class PartLifecycleService
      *
      * @return Collection<int, PartUnit>
      */
-    public function receiveUnits(Part $part, int $quantity): Collection
+    public function receiveUnits(Part $part, int $quantity, ?string $arrivedAt = null): Collection
     {
-        return DB::transaction(function () use ($part, $quantity) {
+        return DB::transaction(function () use ($part, $quantity, $arrivedAt) {
             $units = new Collection;
+            // Computed once outside the loop so every unit from the same Stock
+            // In shares the exact same timestamp — the only signal available
+            // to group units back into their receiving batch later.
+            $receivedAt = $arrivedAt ? Carbon::parse($arrivedAt) : now();
 
             for ($i = 0; $i < $quantity; $i++) {
                 $units->push(PartUnit::create([
                     'part_id' => $part->id,
                     'unit_code' => PartUnit::nextCode($part->id),
                     'status' => PartUnitStatus::Available,
-                    'arrived_at' => now(),
+                    'arrived_at' => $receivedAt,
                 ]));
             }
 

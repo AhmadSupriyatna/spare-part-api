@@ -21,6 +21,7 @@ class PartUnitResource extends JsonResource
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
+            'replacement_strategy' => $this->whenLoaded('part', fn () => $this->part?->replacement_strategy),
             'unit_code' => $this->unit_code,
             'status' => $this->status,
             'arrived_at' => $this->arrived_at,

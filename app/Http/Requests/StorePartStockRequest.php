@@ -31,6 +31,7 @@ class StorePartStockRequest extends FormRequest
             'total_price' => ['required', 'numeric', 'min:0'],
             'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
             'notes' => ['nullable', 'string'],
+            'arrived_at' => ['nullable', 'date', 'before_or_equal:today'],
         ];
     }
 
