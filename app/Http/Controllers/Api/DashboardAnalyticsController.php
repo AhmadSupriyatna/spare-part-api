@@ -56,6 +56,8 @@ class DashboardAnalyticsController extends Controller
             'technician_workload' => $this->technicianWorkload($branch),
             'part_movement' => $this->partMovement($branch),
             'stock_movement_trend' => $this->stockMovementTrend($branch),
+            'installation_sunburst' => $this->installationSunburst($branch),
+            'cost_sunburst' => $this->costSunburst($branch),
         ]]);
     }
 
@@ -571,5 +573,107 @@ class DashboardAnalyticsController extends Controller
             'in_qty' => (int) ($inByMonth[$month] ?? 0),
             'out_qty' => (int) ($outByMonth[$month] ?? 0),
         ])->values()->all();
+    }
+
+    /**
+     * "Mapping Part" sunburst — same currently-installed snapshot as
+     * installationMap(), but kept flat per Line/Machine/Equipment/Part leaf
+     * (instead of pre-aggregated to Line/Machine) so the frontend can build
+     * all four sunburst rings itself, drilling past Machine into Equipment
+     * and Part. Same "Luar Line" bucketing as installationMap().
+     *
+     * @return list<array{line_name: string, machine_name: string, equipment_name: string, part_name: string, count: int}>
+     */
+    private function installationSunburst(Branch $branch): array
+    {
+        $installations = $this->scopeEquipmentToBranch(
+            PartInstallation::query()->whereNull('removed_at'),
+            $branch->id
+        )->with('equipment.machine.line', 'part')->get(['id', 'equipment_id', 'part_id']);
+
+        return $installations
+            ->groupBy(function (PartInstallation $i) {
+                $equipment = $i->equipment;
+
+                return implode('|', [
+                    $equipment->machine?->line?->name ?? 'Luar Line',
+                    $equipment->machine?->name ?? $equipment->name,
+                    $equipment->name,
+                    $i->part->name,
+                ]);
+            })
+            ->map(function (Collection $group) {
+                /** @var PartInstallation $first */
+                $first = $group->first();
+                $equipment = $first->equipment;
+
+                return [
+                    'line_name' => $equipment->machine?->line?->name ?? 'Luar Line',
+                    'machine_name' => $equipment->machine?->name ?? $equipment->name,
+                    'equipment_name' => $equipment->name,
+                    'part_name' => $first->part->name,
+                    'count' => $group->count(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * "Cost per Line/Equipment" sunburst — same actual-spend source as
+     * costHeatmap() (TYPE_ISSUE ledger rows, last 12 months), but kept flat
+     * per Line/Machine/Equipment/Part leaf instead of pre-aggregated to
+     * Line/Machine, so the frontend can drill the sunburst past Machine into
+     * Equipment and Part, the same four rings as installationSunburst().
+     *
+     * @return list<array{line_name: string, machine_name: string, equipment_name: string, part_name: string, cost: string}>
+     */
+    private function costSunburst(Branch $branch): array
+    {
+        $entries = StockLedger::query()
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->where('occurred_at', '>=', now()->startOfMonth()->subMonths(11))
+            ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereNotNull('unit_cost')
+            ->with([
+                'partStock.part',
+                'reference' => fn ($morphTo) => $morphTo->morphWith([
+                    Task::class => ['equipment.machine.line'],
+                    PartReplacementRequest::class => ['equipment.machine.line'],
+                ]),
+            ])
+            ->get(['id', 'quantity_change', 'unit_cost', 'reference_type', 'reference_id', 'part_stock_id']);
+
+        return $entries
+            ->filter(fn (StockLedger $entry) => $entry->reference?->equipment !== null)
+            ->groupBy(function (StockLedger $entry) {
+                $equipment = $entry->reference->equipment;
+
+                return implode('|', [
+                    $equipment->machine?->line?->name ?? 'Luar Line',
+                    $equipment->machine?->name ?? $equipment->name,
+                    $equipment->name,
+                    $entry->partStock->part->name,
+                ]);
+            })
+            ->map(function (Collection $group) {
+                /** @var StockLedger $first */
+                $first = $group->first();
+                $equipment = $first->reference->equipment;
+                $cost = $group->reduce(
+                    fn (string $carry, StockLedger $entry) => bcadd($carry, bcmul((string) $entry->unit_cost, (string) abs($entry->quantity_change), 2), 2),
+                    '0.00'
+                );
+
+                return [
+                    'line_name' => $equipment->machine?->line?->name ?? 'Luar Line',
+                    'machine_name' => $equipment->machine?->name ?? $equipment->name,
+                    'equipment_name' => $equipment->name,
+                    'part_name' => $first->partStock->part->name,
+                    'cost' => $cost,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

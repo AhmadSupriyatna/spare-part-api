@@ -558,4 +558,71 @@ class DashboardAnalyticsTest extends TestCase
         $this->assertSame(15, $thisMonth['in_qty']);
         $this->assertSame(6, $thisMonth['out_qty']);
     }
+
+    public function test_installation_sunburst_counts_active_installations_by_full_hierarchy(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'name' => 'Line A']);
+        $machine = Machine::factory()->create(['line_id' => $line->id, 'name' => 'Mesin Press']);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id, 'name' => 'Pompa 1']);
+        $part = Part::factory()->create(['name' => 'Gear Reducer 1:20']);
+
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $part->id, 'installed_at' => now()]);
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $part->id, 'installed_at' => now()]);
+        // Removed — must not be counted.
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $part->id, 'installed_at' => now(), 'removed_at' => now()]);
+
+        $rows = collect($this->fetchAnalytics()->json('data.installation_sunburst'));
+        $row = $rows->firstWhere('part_name', 'Gear Reducer 1:20');
+
+        $this->assertNotNull($row);
+        $this->assertSame('Line A', $row['line_name']);
+        $this->assertSame('Mesin Press', $row['machine_name']);
+        $this->assertSame('Pompa 1', $row['equipment_name']);
+        $this->assertSame(2, $row['count']);
+    }
+
+    public function test_installation_sunburst_buckets_a_standalone_asset_under_luar_line(): void
+    {
+        $equipment = Equipment::factory()->create(['machine_id' => null, 'branch_id' => $this->branch->id, 'name' => 'Panel Listrik']);
+        $part = Part::factory()->create();
+
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $part->id, 'installed_at' => now()]);
+
+        $rows = collect($this->fetchAnalytics()->json('data.installation_sunburst'));
+        $row = $rows->firstWhere('equipment_name', 'Panel Listrik');
+
+        $this->assertNotNull($row);
+        $this->assertSame('Luar Line', $row['line_name']);
+        $this->assertSame('Panel Listrik', $row['machine_name']);
+    }
+
+    public function test_cost_sunburst_groups_spend_by_full_hierarchy(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'name' => 'Line A']);
+        $machine = Machine::factory()->create(['line_id' => $line->id, 'name' => 'Mesin Press']);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id, 'name' => 'Pompa 1']);
+        $part = Part::factory()->create(['name' => 'Gear Reducer 1:20']);
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+        $task = Task::factory()->create(['equipment_id' => $equipment->id]);
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -2,
+            'balance_after' => 8,
+            'unit_cost' => '50000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now(),
+        ]);
+
+        $rows = collect($this->fetchAnalytics()->json('data.cost_sunburst'));
+        $row = $rows->firstWhere('part_name', 'Gear Reducer 1:20');
+
+        $this->assertNotNull($row);
+        $this->assertSame('Line A', $row['line_name']);
+        $this->assertSame('Mesin Press', $row['machine_name']);
+        $this->assertSame('Pompa 1', $row['equipment_name']);
+        $this->assertSame('100000.00', $row['cost']);
+    }
 }
