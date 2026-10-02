@@ -44,6 +44,7 @@ class PublicMachineMonitoringController extends Controller
             'average_lifetime_hours' => $data['average_lifetime_hours'],
             'monthly_consumption_trend' => $data['monthly_consumption_trend'],
             'top_parts_consumed' => $data['top_parts_consumed'],
+            'historical_part_lifetime' => $data['historical_part_lifetime'],
         ]]);
     }
 }

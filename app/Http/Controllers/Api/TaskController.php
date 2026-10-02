@@ -136,6 +136,25 @@ class TaskController extends Controller
     }
 
     /**
+     * Machine Detail's "Riwayat PM" — every Task ever created for this
+     * Machine's equipment, any status (including Breakdown/Cancelled,
+     * unlike woReportForMachine()'s explicit date-range report), newest
+     * due_date first, paginated rather than a single `woReportForMachine`-
+     * style bulk fetch since a long-lived Machine can accumulate hundreds
+     * of these.
+     */
+    public function historyForMachine(Machine $machine): AnonymousResourceCollection
+    {
+        return TaskResource::collection(
+            Task::query()
+                ->whereHas('equipment', fn ($q) => $q->where('machine_id', $machine->id))
+                ->with(['equipment', 'assignee'])
+                ->orderByDesc('due_date')
+                ->paginate(15)
+        );
+    }
+
+    /**
      * Same report as woReportForMachine(), aggregated across every Machine
      * under this Line instead of just one — see that method's docblock for
      * what "report" means here.

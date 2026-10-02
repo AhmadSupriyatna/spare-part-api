@@ -157,6 +157,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     // regular PM + Part Lifetime auto-scheduled alike — a read-time
     // grouping only, see TaskController::woReportForMachine()/woReportForLine().
     Route::get('/machines/{machine}/wo-report', [TaskController::class, 'woReportForMachine']);
+    Route::get('/machines/{machine}/task-history', [TaskController::class, 'historyForMachine']);
     Route::get('/lines/{line}/wo-report', [TaskController::class, 'woReportForLine']);
     Route::get('/branches/{branch}/part-lifetime-alerts', [PartInstallationController::class, 'atRisk']);
 

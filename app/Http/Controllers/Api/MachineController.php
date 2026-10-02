@@ -90,7 +90,9 @@ class MachineController extends Controller
             'average_lifetime_hours' => $data['average_lifetime_hours'],
             'monthly_consumption_trend' => $data['monthly_consumption_trend'],
             'top_parts_consumed' => $data['top_parts_consumed'],
+            'historical_part_lifetime' => $data['historical_part_lifetime'],
             'installed_part_value' => $data['installed_part_value'],
+            'cost_by_equipment_this_year' => $data['cost_by_equipment_this_year'],
         ]]);
     }
 

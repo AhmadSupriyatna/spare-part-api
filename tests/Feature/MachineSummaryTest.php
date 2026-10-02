@@ -97,4 +97,76 @@ class MachineSummaryTest extends TestCase
         $sealRow = $topParts->firstWhere('part_name', 'Seal');
         $this->assertSame('80000.00', $sealRow['cost']);
     }
+
+    public function test_summary_includes_cost_by_equipment_for_the_current_calendar_year_only(): void
+    {
+        $line = ProductionLine::factory()->create();
+        $branch = $line->branch;
+        $this->admin->branches()->attach($branch->id);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id, 'name' => 'Gearbox A']);
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $branch->id]);
+        $task = Task::factory()->create(['equipment_id' => $equipment->id]);
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -1,
+            'balance_after' => 9,
+            'unit_cost' => '30000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now(),
+        ]);
+        // Last year — must not count toward "this year".
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -1,
+            'balance_after' => 8,
+            'unit_cost' => '999999.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now()->subYear(),
+        ]);
+
+        $response = $this->actingAs($this->admin)->getJson("/api/machines/{$machine->id}/summary");
+
+        $response->assertOk();
+        $row = collect($response->json('data.cost_by_equipment_this_year'))->firstWhere('equipment_name', 'Gearbox A');
+        $this->assertSame('30000.00', $row['cost']);
+    }
+
+    public function test_summary_includes_historical_part_lifetime_from_completed_installations_only(): void
+    {
+        $line = ProductionLine::factory()->create();
+        $this->admin->branches()->attach($line->branch_id);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create(['name' => 'Bearing']);
+
+        PartInstallation::create([
+            'equipment_id' => $equipment->id,
+            'part_id' => $part->id,
+            'installed_at' => now()->subMonths(6),
+            'installed_at_runtime_hours' => 1000,
+            'removed_at' => now()->subMonths(1),
+            'removed_at_runtime_hours' => 2000,
+        ]);
+        PartInstallation::create([
+            'equipment_id' => $equipment->id,
+            'part_id' => $part->id,
+            'installed_at' => now()->subMonths(1),
+            'installed_at_runtime_hours' => 2000,
+            // Still active — must not count, no final hours yet.
+        ]);
+
+        $response = $this->actingAs($this->admin)->getJson("/api/machines/{$machine->id}/summary");
+
+        $response->assertOk();
+        $row = collect($response->json('data.historical_part_lifetime'))->firstWhere('part_name', 'Bearing');
+        $this->assertSame(1000, $row['average_runtime_hours']);
+        $this->assertSame(1, $row['sample_count']);
+    }
 }

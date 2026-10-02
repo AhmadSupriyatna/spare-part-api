@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TaskStatus;
+use App\Models\Equipment;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartInstallation;
@@ -79,10 +80,16 @@ class MachineSummaryService
             'average_lifetime_hours' => $lifetimeHours->isEmpty() ? null : (int) round($lifetimeHours->avg()),
             'monthly_consumption_trend' => $monthlyConsumptionTrend,
             'top_parts_consumed' => $topPartsConsumed,
+            // Not cost data — how long a part TYPE has historically lasted
+            // on this machine before being replaced, from completed
+            // (removed_at set) installation cycles. Safe on the public page
+            // too, but currently only rendered on Machine Detail.
+            'historical_part_lifetime' => $this->historicalPartLifetime($equipmentIds),
         ];
 
         if ($includeCost) {
             $data['installed_part_value'] = $this->installedPartValue($machine, $installations);
+            $data['cost_by_equipment_this_year'] = $this->costByEquipmentThisYear($equipmentIds);
         }
 
         return $data;
@@ -202,5 +209,93 @@ class MachineSummaryService
             ),
             '0.00'
         );
+    }
+
+    /**
+     * Total TYPE_ISSUE cost traceable to each of this Machine's Equipment,
+     * for the current calendar year (Jan 1 through now) — a year-to-date
+     * figure, deliberately not the trailing-12-months window the other
+     * consumption charts use, since "this year" is what was asked for.
+     *
+     * @param  Collection<int, int>  $equipmentIds
+     * @return list<array{equipment_id: int, equipment_name: string, cost: string}>
+     */
+    private function costByEquipmentThisYear(Collection $equipmentIds): array
+    {
+        $entries = StockLedger::query()
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->where('occurred_at', '>=', now()->startOfYear())
+            ->whereNotNull('unit_cost')
+            ->with([
+                'reference' => fn ($morphTo) => $morphTo->morphWith([
+                    Task::class => ['equipment'],
+                    PartReplacementRequest::class => ['equipment'],
+                ]),
+            ])
+            ->get(['id', 'quantity_change', 'unit_cost', 'reference_type', 'reference_id'])
+            ->filter(fn (StockLedger $entry) => $equipmentIds->contains($entry->reference?->equipment?->id));
+
+        return $entries
+            ->groupBy(fn (StockLedger $entry) => $entry->reference->equipment->id)
+            ->map(function (Collection $group) {
+                /** @var Equipment $equipment */
+                $equipment = $group->first()->reference->equipment;
+                $cost = $group->reduce(
+                    fn (string $carry, StockLedger $entry) => bcadd($carry, bcmul((string) $entry->unit_cost, (string) abs($entry->quantity_change), 2), 2),
+                    '0.00'
+                );
+
+                return [
+                    'equipment_id' => $equipment->id,
+                    'equipment_name' => $equipment->name,
+                    'cost' => $cost,
+                ];
+            })
+            ->sortByDesc('cost')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * How many runtime hours a part TYPE has historically lasted before
+     * being replaced, averaged across every COMPLETED (removed_at set)
+     * installation cycle on this machine's equipment — unlike
+     * average_lifetime_hours (the CURRENT age of still-active
+     * installations, which understates a healthy part's eventual
+     * lifespan), this only counts cycles that actually ended, so it
+     * reflects a real historical replacement interval.
+     *
+     * @param  Collection<int, int>  $equipmentIds
+     * @return list<array{part_id: int, part_name: string, average_runtime_hours: int, sample_count: int}>
+     */
+    private function historicalPartLifetime(Collection $equipmentIds): array
+    {
+        $completed = PartInstallation::query()
+            ->whereIn('equipment_id', $equipmentIds)
+            ->whereNotNull('removed_at')
+            ->whereNotNull('installed_at_runtime_hours')
+            ->whereNotNull('removed_at_runtime_hours')
+            ->with('part')
+            ->get(['id', 'part_id', 'installed_at_runtime_hours', 'removed_at_runtime_hours']);
+
+        return $completed
+            ->filter(fn (PartInstallation $installation) => $installation->part !== null)
+            ->groupBy('part_id')
+            ->map(function (Collection $group) {
+                /** @var Part $part */
+                $part = $group->first()->part;
+                $hoursUsed = $group->map(
+                    fn (PartInstallation $installation) => max(0, $installation->removed_at_runtime_hours - $installation->installed_at_runtime_hours)
+                );
+
+                return [
+                    'part_id' => $part->id,
+                    'part_name' => $part->name,
+                    'average_runtime_hours' => (int) round($hoursUsed->avg()),
+                    'sample_count' => $group->count(),
+                ];
+            })
+            ->values()
+            ->all();
     }
 }
