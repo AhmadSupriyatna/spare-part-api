@@ -8,10 +8,12 @@ use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\InvalidOldInstallationException;
 use App\Exceptions\PartUnitAlreadyInstalledException;
 use App\Models\Equipment;
+use App\Models\Part;
 use App\Models\PartInstallation;
 use App\Models\PartRepair;
 use App\Models\PartUnit;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -71,6 +73,35 @@ class PartLifecycleService
             $pendingRepair?->update(['reinstalled_installation_id' => $installation->id]);
 
             return $installation;
+        });
+    }
+
+    /**
+     * "Part Passport" — for a `has_passport` Part only, Stock In creates one
+     * PartUnit per quantity received immediately, each with its own QR
+     * (unit_code) and an `arrived_at` timestamp, status `Available` so it
+     * shows up in PartPickerSheet's "available units" dropdown right away —
+     * install() needs no changes, its existing `part_unit_id` branch already
+     * handles "reuse an existing unit" exactly like a repaired-and-returned
+     * one. Called from PartStockController::recordReceiving().
+     *
+     * @return Collection<int, PartUnit>
+     */
+    public function receiveUnits(Part $part, int $quantity): Collection
+    {
+        return DB::transaction(function () use ($part, $quantity) {
+            $units = new Collection;
+
+            for ($i = 0; $i < $quantity; $i++) {
+                $units->push(PartUnit::create([
+                    'part_id' => $part->id,
+                    'unit_code' => PartUnit::nextCode($part->id),
+                    'status' => PartUnitStatus::Available,
+                    'arrived_at' => now(),
+                ]));
+            }
+
+            return $units;
         });
     }
 

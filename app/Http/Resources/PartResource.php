@@ -28,6 +28,7 @@ class PartResource extends JsonResource
             'minimum_stock_strategy' => $this->minimum_stock_strategy->value,
             'image_url' => $this->imageUrl(),
             'is_active' => $this->is_active,
+            'has_passport' => $this->has_passport,
             'stocks' => PartStockResource::collection($this->whenLoaded('stocks')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

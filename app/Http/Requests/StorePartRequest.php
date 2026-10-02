@@ -44,6 +44,7 @@ class StorePartRequest extends FormRequest
             'minimum_stock_strategy' => ['sometimes', Rule::enum(PartMinimumStockStrategy::class)],
             'image' => ['nullable', 'image', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
+            'has_passport' => ['sometimes', 'boolean'],
         ];
     }
 }

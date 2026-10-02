@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\PartUnit;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\PartUnit
+ * @mixin PartUnit
  */
 class PartUnitResource extends JsonResource
 {
@@ -22,6 +23,7 @@ class PartUnitResource extends JsonResource
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
             'unit_code' => $this->unit_code,
             'status' => $this->status,
+            'arrived_at' => $this->arrived_at,
             'total_runtime_hours_used' => $this->totalRuntimeHoursUsed(),
             'estimated_lifetime_hours' => $this->whenLoaded('part', fn () => $this->part?->estimated_lifetime_hours),
             'percent_used' => $this->percentUsed(),

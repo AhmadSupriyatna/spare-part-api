@@ -20,12 +20,14 @@ class PartUnit extends Model
         'part_id',
         'unit_code',
         'status',
+        'arrived_at',
     ];
 
     protected function casts(): array
     {
         return [
             'status' => PartUnitStatus::class,
+            'arrived_at' => 'datetime',
         ];
     }
 

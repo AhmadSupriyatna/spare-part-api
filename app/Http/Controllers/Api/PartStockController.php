@@ -12,6 +12,7 @@ use App\Http\Requests\StorePartStockRequest;
 use App\Http\Requests\UpdatePartStockLocationRequest;
 use App\Http\Resources\PartReservationResource;
 use App\Http\Resources\PartStockResource;
+use App\Http\Resources\PartUnitResource;
 use App\Http\Resources\StockLedgerReportResource;
 use App\Http\Resources\StockLedgerResource;
 use App\Models\Branch;
@@ -19,10 +20,12 @@ use App\Models\Location;
 use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
+use App\Models\PartUnit;
 use App\Models\StockLedger;
 use App\Models\Task;
 use App\Models\TaskPartCheck;
 use App\Models\User;
+use App\Services\PartLifecycleService;
 use App\Services\StockMovementService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +35,10 @@ use Illuminate\Support\Facades\Date;
 
 class PartStockController extends Controller
 {
-    public function __construct(private readonly StockMovementService $stockMovements) {}
+    public function __construct(
+        private readonly StockMovementService $stockMovements,
+        private readonly PartLifecycleService $lifecycle,
+    ) {}
 
     public function index(Branch $branch): AnonymousResourceCollection
     {
@@ -161,11 +167,14 @@ class PartStockController extends Controller
      */
     public function receive(ReceiveStockRequest $request, PartStock $partStock): JsonResponse
     {
-        $this->recordReceiving($partStock, $request->validated(), $request->user());
+        $newUnits = $this->recordReceiving($partStock, $request->validated(), $request->user());
         $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
         $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
 
-        return (new PartStockResource($fresh))->response()->setStatusCode(200);
+        return (new PartStockResource($fresh))
+            ->additional(['new_units' => PartUnitResource::collection($newUnits)])
+            ->response()
+            ->setStatusCode(200);
     }
 
     /**
@@ -185,17 +194,21 @@ class PartStockController extends Controller
             'branch_id' => $branch->id,
         ]);
 
-        $this->recordReceiving($partStock, $data, $request->user());
+        $newUnits = $this->recordReceiving($partStock, $data, $request->user());
         $fresh = $partStock->fresh(['part', 'branch', 'supplier', 'location']);
         $this->attachComputedAttributes(new Collection([$fresh]), $fresh->branch_id);
 
-        return (new PartStockResource($fresh))->response()->setStatusCode(201);
+        return (new PartStockResource($fresh))
+            ->additional(['new_units' => PartUnitResource::collection($newUnits)])
+            ->response()
+            ->setStatusCode(201);
     }
 
     /**
      * @param  array{quantity: int, total_price: float|string, supplier_id?: int|null, notes?: string|null}  $data
+     * @return Collection<int, PartUnit> newly created units — empty unless this Part has_passport.
      */
-    private function recordReceiving(PartStock $partStock, array $data, ?User $user): void
+    private function recordReceiving(PartStock $partStock, array $data, ?User $user): Collection
     {
         $this->stockMovements->record(
             partStock: $partStock,
@@ -218,6 +231,12 @@ class PartStockController extends Controller
             },
             unitCostSnapshot: (string) round($data['total_price'] / $data['quantity'], 2),
         );
+
+        if (! $partStock->part->has_passport) {
+            return new Collection;
+        }
+
+        return $this->lifecycle->receiveUnits($partStock->part, $data['quantity'])->loadMissing('part');
     }
 
     public function adjust(AdjustStockRequest $request, PartStock $partStock): JsonResponse

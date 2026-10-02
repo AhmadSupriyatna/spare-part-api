@@ -24,6 +24,7 @@ class Part extends Model
         'minimum_stock_strategy',
         'image_path',
         'is_active',
+        'has_passport',
     ];
 
     protected function casts(): array
@@ -34,6 +35,7 @@ class Part extends Model
             'replacement_strategy' => PartReplacementStrategy::class,
             'minimum_stock_strategy' => PartMinimumStockStrategy::class,
             'is_active' => 'boolean',
+            'has_passport' => 'boolean',
         ];
     }
 
