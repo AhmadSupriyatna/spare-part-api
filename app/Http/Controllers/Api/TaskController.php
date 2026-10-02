@@ -8,6 +8,7 @@ use App\Exceptions\InvalidOldInstallationException;
 use App\Exceptions\PartStockBranchMismatchException;
 use App\Exceptions\PartStockNotFoundException;
 use App\Exceptions\PartUnitAlreadyInstalledException;
+use App\Exceptions\PartUnitPartMismatchException;
 use App\Exceptions\TaskAlreadyCompletedException;
 use App\Http\Controllers\Concerns\ClaimsWorkItem;
 use App\Http\Controllers\Controller;
@@ -283,6 +284,7 @@ class TaskController extends Controller
         } catch (
             PartStockNotFoundException|
             PartUnitAlreadyInstalledException|
+            PartUnitPartMismatchException|
             AmbiguousInstallationException|
             ChecklistPartMismatchException|
             InvalidOldInstallationException|

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\PartUnitAlreadyInstalledException;
+use App\Exceptions\PartUnitPartMismatchException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ScheduleLifetimeReplacementRequest;
 use App\Http\Requests\StorePartInstallationRequest;
@@ -85,17 +86,17 @@ class PartInstallationController extends Controller
     }
 
     /**
-     * Install a brand-new unit of a part onto an equipment (initial setup /
-     * genuinely new stock — see StorePartInstallationRequest for why this
-     * never accepts an existing repaired unit). Multiple simultaneous units
-     * of the same part can be active on one equipment at once; nothing here
-     * auto-closes another installation just for sharing the same part_id.
+     * Install a part onto an equipment — a brand-new unit, or an existing
+     * available one when `part_unit_id` is given (see StorePartInstallationRequest).
+     * Multiple simultaneous units of the same part can be active on one
+     * equipment at once; nothing here auto-closes another installation just
+     * for sharing the same part_id.
      */
     public function store(StorePartInstallationRequest $request, Equipment $equipment): PartInstallationResource|JsonResponse
     {
         try {
             $installation = $this->lifecycle->install($equipment, $request->validated(), $request->user());
-        } catch (PartUnitAlreadyInstalledException $e) {
+        } catch (PartUnitAlreadyInstalledException|PartUnitPartMismatchException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 

@@ -9,6 +9,7 @@ use App\Models\Equipment;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartStock;
+use App\Models\PartUnit;
 use App\Models\ProductionLine;
 use App\Models\User;
 use App\Services\PartLifecycleService;
@@ -132,5 +133,56 @@ class PartPassportTest extends TestCase
         $unit->refresh();
         $this->assertSame(PartUnitStatus::InService, $unit->status);
         $this->assertTrue($unit->arrived_at->equalTo($arrivedAt));
+    }
+
+    public function test_equipment_install_endpoint_reuses_an_existing_unit_instead_of_creating_a_new_one(): void
+    {
+        $part = Part::factory()->create(['has_passport' => true]);
+        $stock = PartStock::factory()->create([
+            'part_id' => $part->id,
+            'branch_id' => $this->branch->id,
+            'quantity_on_hand' => 0,
+        ]);
+        $this->actingAs($this->admin)->postJson("/api/part-stocks/{$stock->id}/receive", [
+            'quantity' => 1,
+            'total_price' => 100000,
+        ])->assertOk();
+        $unit = $part->units()->sole();
+
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+
+        $response = $this->actingAs($this->admin)->postJson("/api/equipment/{$equipment->id}/part-installations", [
+            'part_id' => $part->id,
+            'part_unit_id' => $unit->id,
+        ]);
+
+        $response->assertCreated();
+        $this->assertSame($unit->id, $response->json('data.part_unit_id'));
+        $this->assertSame(1, $part->units()->count());
+    }
+
+    public function test_equipment_install_endpoint_rejects_a_unit_belonging_to_a_different_part(): void
+    {
+        $part = Part::factory()->create();
+        $otherPart = Part::factory()->create();
+        $otherUnit = PartUnit::create([
+            'part_id' => $otherPart->id,
+            'unit_code' => PartUnit::nextCode($otherPart->id),
+            'status' => PartUnitStatus::Available,
+        ]);
+
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+
+        $response = $this->actingAs($this->admin)->postJson("/api/equipment/{$equipment->id}/part-installations", [
+            'part_id' => $part->id,
+            'part_unit_id' => $otherUnit->id,
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame(PartUnitStatus::Available, $otherUnit->fresh()->status);
     }
 }

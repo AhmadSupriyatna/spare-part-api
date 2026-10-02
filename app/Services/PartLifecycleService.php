@@ -7,6 +7,7 @@ use App\Enums\PartUnitStatus;
 use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\InvalidOldInstallationException;
 use App\Exceptions\PartUnitAlreadyInstalledException;
+use App\Exceptions\PartUnitPartMismatchException;
 use App\Models\Equipment;
 use App\Models\Part;
 use App\Models\PartInstallation;
@@ -29,6 +30,8 @@ class PartLifecycleService
      * @param  array{part_id: int, part_unit_id?: int|null, installed_at?: string|null, notes?: string|null, replacing_installation_id?: int|null}  $data
      *
      * @throws PartUnitAlreadyInstalledException if the chosen unit is already mounted somewhere.
+     * @throws PartUnitPartMismatchException if the chosen unit doesn't belong to the given part —
+     *                                       never trust the caller (e.g. a QR scan) to have matched them correctly.
      */
     public function install(Equipment $equipment, array $data, User $user): PartInstallation
     {
@@ -42,6 +45,10 @@ class PartLifecycleService
 
             if (! empty($data['part_unit_id'])) {
                 $unit = PartUnit::whereKey($data['part_unit_id'])->lockForUpdate()->firstOrFail();
+
+                if ($unit->part_id !== $data['part_id']) {
+                    throw new PartUnitPartMismatchException($unit->id, $data['part_id']);
+                }
 
                 if ($unit->currentInstallation()) {
                     throw new PartUnitAlreadyInstalledException($unit->id);

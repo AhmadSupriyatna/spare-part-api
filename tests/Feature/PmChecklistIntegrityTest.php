@@ -2,17 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Enums\PartUnitStatus;
 use App\Enums\TaskStatus;
 use App\Exceptions\AmbiguousInstallationException;
 use App\Exceptions\ChecklistPartMismatchException;
 use App\Exceptions\InvalidOldInstallationException;
 use App\Exceptions\PartStockBranchMismatchException;
+use App\Exceptions\PartUnitPartMismatchException;
 use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartInstallation;
 use App\Models\PartStock;
+use App\Models\PartUnit;
 use App\Models\ProductionLine;
 use App\Models\StockLedger;
 use App\Models\Task;
@@ -277,5 +280,67 @@ class PmChecklistIntegrityTest extends TestCase
         $this->assertSame(0, StockLedger::count());
         $this->assertSame(TaskStatus::Pending, $task->fresh()->status);
         $this->assertSame(10, $stock->fresh()->quantity_on_hand);
+    }
+
+    // --- D. Scanned part_unit_id must actually belong to the checklist's part ---
+    // (PM QR-scan-to-replace: WoCard sends whichever unit the camera decoded —
+    // never trusted to match the right part without this server-side check.)
+
+    private function availableUnit(Part $part): PartUnit
+    {
+        return PartUnit::create([
+            'part_id' => $part->id,
+            'unit_code' => PartUnit::nextCode($part->id),
+            'status' => PartUnitStatus::Available,
+        ]);
+    }
+
+    public function test_d1_scanned_unit_belonging_to_a_different_part_is_rejected(): void
+    {
+        $otherPart = Part::factory()->create();
+        $wrongUnit = $this->availableUnit($otherPart);
+        $task = $this->makeTask();
+        $check = $this->makeCheck($task, $this->part);
+
+        try {
+            app(TaskService::class)->complete($task, $this->user, checks: [[
+                'id' => $check->id,
+                'part_id' => $this->part->id,
+                'is_replaced' => true,
+                'quantity_used' => 1,
+                'part_unit_id' => $wrongUnit->id,
+            ]]);
+            $this->fail('Expected PartUnitPartMismatchException was not thrown.');
+        } catch (PartUnitPartMismatchException) {
+            // expected
+        }
+
+        $this->assertSame(PartUnitStatus::Available, $wrongUnit->fresh()->status);
+        $this->assertSame(TaskStatus::Pending, $task->fresh()->status);
+        $this->assertFalse($check->fresh()->is_replaced);
+        $this->assertSame(0, PartInstallation::count());
+        $this->assertSame(0, StockLedger::count());
+    }
+
+    public function test_d2_scanned_unit_matching_the_checks_part_is_installed(): void
+    {
+        $unit = $this->availableUnit($this->part);
+        $task = $this->makeTask();
+        $check = $this->makeCheck($task, $this->part);
+
+        app(TaskService::class)->complete($task, $this->user, checks: [[
+            'id' => $check->id,
+            'part_id' => $this->part->id,
+            'is_replaced' => true,
+            'quantity_used' => 1,
+            'part_unit_id' => $unit->id,
+        ]]);
+
+        $unit->refresh();
+        $this->assertSame(PartUnitStatus::InService, $unit->status);
+        $this->assertSame($unit->id, $check->fresh()->partInstallation?->part_unit_id);
+        // A scanned (reused) unit never issues stock — only a brand-new,
+        // off-the-shelf unit does (see TaskService::completeChecklist()).
+        $this->assertSame(0, StockLedger::count());
     }
 }

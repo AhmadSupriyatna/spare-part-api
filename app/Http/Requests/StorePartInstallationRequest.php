@@ -6,14 +6,17 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * This endpoint always installs a brand-new PartUnit — it deliberately does
- * NOT accept a `part_unit_id` for reinstalling an existing "available"
- * (i.e. repaired) unit. That used to be allowed here and let anyone with
- * Admin Spare Part reinstall a repaired unit with zero oversight, bypassing
- * the Supervisor approval that the equivalent QR-scan reinstall flow
- * (PartUnitActionRequest, see PartUnitActionService) always goes through.
- * Reinstalling a repaired unit must go through that QR flow now; this form
- * is only for genuinely new installations (including initial data setup).
+ * Installs a part onto an equipment — a brand-new PartUnit by default, or an
+ * existing "available" one (e.g. a Part Passport unit just received, or a
+ * repaired unit) when `part_unit_id` is given. This is distinct from the
+ * Supervisor-gated reinstall flow for an *unplanned* find (PartUnitActionRequest,
+ * see PartUnitActionService/PartUnitScanPage) — that one exists for a
+ * technician reinstalling a repaired unit with no prior record of where it's
+ * going, so it needs oversight. Here the install is already the deliberate
+ * action (this form, or a PM checklist scan), so no extra approval gate is
+ * layered on top — PartLifecycleService::install() still guards against the
+ * unit not actually belonging to `part_id`, or already being installed
+ * elsewhere.
  */
 class StorePartInstallationRequest extends FormRequest
 {
@@ -29,6 +32,7 @@ class StorePartInstallationRequest extends FormRequest
     {
         return [
             'part_id' => ['required', 'integer', 'exists:parts,id'],
+            'part_unit_id' => ['nullable', 'integer', 'exists:part_units,id'],
             'installed_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
         ];

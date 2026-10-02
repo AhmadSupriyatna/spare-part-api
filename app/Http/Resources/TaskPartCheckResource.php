@@ -21,6 +21,10 @@ class TaskPartCheckResource extends JsonResource
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
+            // "Part Passport" — a true row must go through WoCard's QR scan
+            // flow instead of the plain auto-pick checkbox (see TaskService::
+            // completeChecklist()'s part_unit_id branch).
+            'has_passport' => $this->whenLoaded('part', fn () => (bool) $this->part?->has_passport),
             'quantity_planned' => $this->quantity_planned,
             'is_replaced' => $this->is_replaced,
             'quantity_used' => $this->quantity_used,
