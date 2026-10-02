@@ -89,6 +89,7 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
 Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'me']);
+    Route::put('/user', [AuthController::class, 'updateProfile']);
     Route::get('/search', [SearchController::class, 'index']);
 
     // Master data: any authenticated role can read.
