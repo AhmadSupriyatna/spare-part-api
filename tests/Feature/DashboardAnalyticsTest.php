@@ -775,4 +775,69 @@ class DashboardAnalyticsTest extends TestCase
         $this->assertSame($lastYear, $projection['year']);
         $this->assertSame('600000.00', $projection['planned_total']);
     }
+
+    public function test_available_years_always_includes_the_current_year_with_no_data_at_all(): void
+    {
+        $years = $this->fetchAnalytics()->json('data.available_years');
+
+        $this->assertSame([(int) now()->format('Y')], $years);
+    }
+
+    public function test_available_years_includes_a_year_that_only_has_a_budget(): void
+    {
+        $lastYear = (int) now()->format('Y') - 1;
+        Budget::create([
+            'branch_id' => $this->branch->id,
+            'replacement_strategy' => 'life_based',
+            'year' => $lastYear,
+            'planned_amount' => '100000.00',
+            'corrective_amount' => '0.00',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $years = $this->fetchAnalytics()->json('data.available_years');
+
+        $this->assertContains($lastYear, $years);
+    }
+
+    public function test_available_years_includes_a_year_that_only_has_a_stock_ledger_entry(): void
+    {
+        $twoYearsAgo = (int) now()->format('Y') - 2;
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+        $task = Task::factory()->create();
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -1,
+            'balance_after' => 9,
+            'unit_cost' => '10000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => Carbon::create($twoYearsAgo, 3, 1),
+        ]);
+
+        $years = $this->fetchAnalytics()->json('data.available_years');
+
+        $this->assertContains($twoYearsAgo, $years);
+    }
+
+    public function test_available_years_excludes_a_year_from_a_different_branch(): void
+    {
+        $otherBranch = Branch::factory()->create();
+        $lastYear = (int) now()->format('Y') - 1;
+        Budget::create([
+            'branch_id' => $otherBranch->id,
+            'replacement_strategy' => 'life_based',
+            'year' => $lastYear,
+            'planned_amount' => '100000.00',
+            'corrective_amount' => '0.00',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $years = $this->fetchAnalytics()->json('data.available_years');
+
+        $this->assertNotContains($lastYear, $years);
+    }
 }

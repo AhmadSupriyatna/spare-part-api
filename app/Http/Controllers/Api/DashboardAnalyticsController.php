@@ -59,6 +59,7 @@ class DashboardAnalyticsController extends Controller
 
         return response()->json(['data' => [
             'year' => $year,
+            'available_years' => $this->availableYears($branch),
             'failure_trend' => $this->failureTrend($branch, $year),
             'cost_heatmap' => $this->costHeatmap($branch, $year),
             'budget_projection' => $this->budgetProjection($branch, $year),
@@ -747,5 +748,43 @@ class DashboardAnalyticsController extends Controller
             'scheduled_count' => (int) ($scheduledByMonth[$month] ?? 0),
             'failure_count' => (int) ($failureByMonth[$month] ?? 0),
         ])->values()->all();
+    }
+
+    /**
+     * Which years the year dropdown should actually offer — every year that
+     * has at least one of: a spend ledger entry, a Budget, a failure/
+     * breakdown report, or a part installation, for this branch, PLUS the
+     * current year unconditionally (so a brand-new branch with zero
+     * activity yet still has somewhere for its default selection to land).
+     * Sorted newest first.
+     *
+     * @return list<int>
+     */
+    private function availableYears(Branch $branch): array
+    {
+        $years = collect([(int) now()->year]);
+
+        $years = $years->merge(
+            StockLedger::query()
+                ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
+                ->pluck('occurred_at')
+                ->map(fn ($date) => (int) Carbon::parse($date)->format('Y'))
+        );
+
+        $years = $years->merge($branch->budgets()->pluck('year'));
+
+        $years = $years->merge(
+            $this->scopeEquipmentToBranch(PartReplacementRequest::query(), $branch->id)
+                ->pluck('created_at')
+                ->map(fn ($date) => (int) Carbon::parse($date)->format('Y'))
+        );
+
+        $years = $years->merge(
+            $this->scopeEquipmentToBranch(PartInstallation::query(), $branch->id)
+                ->pluck('installed_at')
+                ->map(fn ($date) => (int) Carbon::parse($date)->format('Y'))
+        );
+
+        return $years->unique()->sortDesc()->values()->all();
     }
 }
