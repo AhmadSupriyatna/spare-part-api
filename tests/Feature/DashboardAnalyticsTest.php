@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Models\Branch;
 use App\Models\Budget;
 use App\Models\Equipment;
+use App\Models\Fp3Request;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartInstallation;
@@ -16,6 +17,7 @@ use App\Models\PartStock;
 use App\Models\ProductionLine;
 use App\Models\StockLedger;
 use App\Models\Task;
+use App\Models\TaskLibrary;
 use App\Models\User;
 use App\Services\PartLifecycleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -390,5 +392,170 @@ class DashboardAnalyticsTest extends TestCase
 
         $this->assertNotNull($row);
         $this->assertSame('60000.00', $row['cost']);
+    }
+
+    public function test_stock_value_sums_quantity_times_unit_cost(): void
+    {
+        $partA = Part::factory()->create();
+        $partB = Part::factory()->create();
+        PartStock::factory()->create(['part_id' => $partA->id, 'branch_id' => $this->branch->id, 'quantity_on_hand' => 10, 'unit_cost' => '5000.00']);
+        PartStock::factory()->create(['part_id' => $partB->id, 'branch_id' => $this->branch->id, 'quantity_on_hand' => 3, 'unit_cost' => '2000.00']);
+
+        $value = $this->fetchAnalytics()->json('data.stock_value');
+
+        $this->assertSame('56000.00', $value); // 10*5000 + 3*2000
+    }
+
+    public function test_pm_vs_failure_cost_splits_by_reference_type(): void
+    {
+        $equipment = Equipment::factory()->create();
+        $library = TaskLibrary::create([
+            'equipment_id' => $equipment->id,
+            'code' => 'TL-1',
+            'title' => 'Cek Rutin',
+            'is_active' => true,
+        ]);
+        $pmTask = Task::factory()->create(['equipment_id' => $equipment->id, 'task_library_id' => $library->id]);
+        $breakdownTask = Task::factory()->create(['equipment_id' => $equipment->id]);
+
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+
+        $replacementRequest = PartReplacementRequest::create([
+            'part_id' => $part->id,
+            'equipment_id' => $equipment->id,
+            'event_type' => 'breakdown',
+            'status' => 'pending',
+            'reason' => 'Rusak',
+            'requested_by_name' => 'Teknisi',
+            'quantity_used' => 1,
+        ]);
+        $fp3Request = Fp3Request::create([
+            'branch_id' => $this->branch->id,
+            'code' => '1/FP3/01/2026',
+            'requester_name' => 'Operator',
+            'department' => 'Produksi',
+            'description' => 'Rusak',
+            'request_photo_path' => 'fp3-requests/dummy.jpg',
+            'status' => 'pending',
+        ]);
+
+        $makeLedger = function (string $referenceType, int $referenceId, string $unitCost) use ($stock) {
+            StockLedger::create([
+                'part_stock_id' => $stock->id,
+                'type' => StockLedger::TYPE_ISSUE,
+                'quantity_change' => -1,
+                'balance_after' => 9,
+                'unit_cost' => $unitCost,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+                'occurred_at' => now(),
+            ]);
+        };
+
+        $makeLedger(Task::class, $pmTask->id, '10000.00');
+        $makeLedger(Task::class, $breakdownTask->id, '20000.00');
+        $makeLedger(PartReplacementRequest::class, $replacementRequest->id, '5000.00');
+        $makeLedger(Fp3Request::class, $fp3Request->id, '3000.00');
+
+        $split = $this->fetchAnalytics()->json('data.pm_vs_failure_cost');
+
+        $this->assertSame('10000.00', $split['pm_cost']);
+        $this->assertSame('28000.00', $split['failure_cost']); // 20000 + 5000 + 3000
+    }
+
+    public function test_equipment_coverage_counts_equipment_without_an_active_task_library(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $covered = Equipment::factory()->create(['machine_id' => $machine->id]);
+        Equipment::factory()->create(['machine_id' => $machine->id]); // uncovered
+
+        TaskLibrary::create([
+            'equipment_id' => $covered->id,
+            'code' => 'TL-1',
+            'title' => 'Cek Rutin',
+            'is_active' => true,
+        ]);
+
+        $coverage = $this->fetchAnalytics()->json('data.equipment_coverage');
+
+        $this->assertSame(2, $coverage['total_equipment']);
+        $this->assertSame(1, $coverage['without_library']);
+    }
+
+    public function test_technician_workload_counts_open_tasks_per_assignee(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id]);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $engineer = User::factory()->create(['name' => 'Budi Teknisi']);
+
+        Task::factory()->create(['equipment_id' => $equipment->id, 'assigned_to' => $engineer->id, 'status' => TaskStatus::Pending]);
+        Task::factory()->create(['equipment_id' => $equipment->id, 'assigned_to' => $engineer->id, 'status' => TaskStatus::InProgress]);
+        // Completed — must not count toward open workload.
+        Task::factory()->create(['equipment_id' => $equipment->id, 'assigned_to' => $engineer->id, 'status' => TaskStatus::Completed]);
+
+        $workload = collect($this->fetchAnalytics()->json('data.technician_workload'));
+        $row = $workload->firstWhere('name', 'Budi Teknisi');
+
+        $this->assertNotNull($row);
+        $this->assertSame(2, $row['open_count']);
+    }
+
+    public function test_part_movement_lists_fast_movers_and_zero_issue_slow_movers(): void
+    {
+        $fastPart = Part::factory()->create(['name' => 'Bearing 6204']);
+        $slowPart = Part::factory()->create(['name' => 'Seal Oring']);
+        $fastStock = PartStock::factory()->create(['part_id' => $fastPart->id, 'branch_id' => $this->branch->id, 'quantity_on_hand' => 5]);
+        PartStock::factory()->create(['part_id' => $slowPart->id, 'branch_id' => $this->branch->id, 'quantity_on_hand' => 20]);
+        $task = Task::factory()->create();
+
+        StockLedger::create([
+            'part_stock_id' => $fastStock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -4,
+            'balance_after' => 5,
+            'unit_cost' => '1000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now(),
+        ]);
+
+        $movement = $this->fetchAnalytics()->json('data.part_movement');
+        $fastRow = collect($movement['fast_moving'])->firstWhere('part_name', 'Bearing 6204');
+        $slowRow = collect($movement['slow_moving'])->firstWhere('part_name', 'Seal Oring');
+
+        $this->assertNotNull($fastRow);
+        $this->assertSame(4, $fastRow['qty_issued']);
+        $this->assertNotNull($slowRow);
+        $this->assertSame(20, $slowRow['quantity_on_hand']);
+    }
+
+    public function test_stock_movement_trend_buckets_receiving_and_issue_by_month(): void
+    {
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_RECEIVING,
+            'quantity_change' => 15,
+            'balance_after' => 15,
+            'occurred_at' => now(),
+        ]);
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -6,
+            'balance_after' => 9,
+            'occurred_at' => now(),
+        ]);
+
+        $trend = collect($this->fetchAnalytics()->json('data.stock_movement_trend'))->keyBy('month');
+        $thisMonth = $trend[now()->format('Y-m')];
+
+        $this->assertSame(15, $thisMonth['in_qty']);
+        $this->assertSame(6, $thisMonth['out_qty']);
     }
 }

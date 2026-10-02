@@ -9,6 +9,7 @@ use App\Models\Budget;
 use App\Models\Equipment;
 use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
+use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
 use App\Services\BudgetRealizationService;
@@ -49,6 +50,12 @@ class DashboardAnalyticsController extends Controller
             'at_risk_parts' => $this->atRiskParts($branch),
             'installation_map' => $this->installationMap($branch),
             'cost_by_part' => $this->costByPart($branch),
+            'stock_value' => $this->stockValue($branch),
+            'pm_vs_failure_cost' => $this->pmVsFailureCost($branch),
+            'equipment_coverage' => $this->equipmentCoverage($branch),
+            'technician_workload' => $this->technicianWorkload($branch),
+            'part_movement' => $this->partMovement($branch),
+            'stock_movement_trend' => $this->stockMovementTrend($branch),
         ]]);
     }
 
@@ -365,5 +372,202 @@ class DashboardAnalyticsController extends Controller
             'planned_total' => $plannedTotal,
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * Total Rp value currently sitting in this branch's stock
+     * (quantity_on_hand * unit_cost, summed across every PartStock row) —
+     * a snapshot, not a time window like the other charts here.
+     */
+    private function stockValue(Branch $branch): string
+    {
+        return PartStock::where('branch_id', $branch->id)
+            ->get(['quantity_on_hand', 'unit_cost'])
+            ->reduce(
+                fn (string $carry, PartStock $stock) => bcadd($carry, bcmul((string) $stock->quantity_on_hand, (string) $stock->unit_cost, 2), 2),
+                '0.00'
+            );
+    }
+
+    /**
+     * "Sebaran Cost PM vs Failure" — same actual-spend source as
+     * costHeatmap()/costByPart() (TYPE_ISSUE ledger rows, last 12 months),
+     * split into two buckets by what the ledger entry's reference actually
+     * is: a Task scheduled from a Task Library or Part Lifetime trigger is
+     * planned work (PM); an ad-hoc/breakdown Task, a PartReplacementRequest
+     * (the public breakdown QR flow), or an Fp3Request (repair/fabrication
+     * request) are all reactive work (Failure). A null/unresolvable
+     * reference is excluded, same as costHeatmap()'s own rule.
+     *
+     * @return array{pm_cost: string, failure_cost: string}
+     */
+    private function pmVsFailureCost(Branch $branch): array
+    {
+        $entries = StockLedger::query()
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->where('occurred_at', '>=', now()->startOfMonth()->subMonths(11))
+            ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereNotNull('unit_cost')
+            ->with(['reference' => fn ($morphTo) => $morphTo->morphWith([
+                Task::class => ['partChecks'],
+            ])])
+            ->get(['id', 'quantity_change', 'unit_cost', 'reference_type', 'reference_id']);
+
+        $pmCost = '0.00';
+        $failureCost = '0.00';
+
+        foreach ($entries as $entry) {
+            if ($entry->reference === null) {
+                continue;
+            }
+
+            $cost = bcmul((string) $entry->unit_cost, (string) abs($entry->quantity_change), 2);
+            $isPm = $entry->reference instanceof Task
+                && ($entry->reference->task_library_id !== null || $entry->reference->partChecks->isNotEmpty());
+
+            if ($isPm) {
+                $pmCost = bcadd($pmCost, $cost, 2);
+            } else {
+                $failureCost = bcadd($failureCost, $cost, 2);
+            }
+        }
+
+        return ['pm_cost' => $pmCost, 'failure_cost' => $failureCost];
+    }
+
+    /**
+     * How many Equipment in this branch have zero active Task Library
+     * recipes registered — a PM coverage gap, not something any other chart
+     * here surfaces (every other chart only sees work that's already
+     * scheduled, never the equipment nobody's scheduled anything for).
+     *
+     * @return array{total_equipment: int, without_library: int}
+     */
+    private function equipmentCoverage(Branch $branch): array
+    {
+        $branchEquipment = fn () => Equipment::where('branch_id', $branch->id)
+            ->orWhereHas('machine', fn ($q) => $q->where('branch_id', $branch->id)
+                ->orWhereHas('line', fn ($q2) => $q2->where('branch_id', $branch->id)));
+
+        return [
+            'total_equipment' => $branchEquipment()->count(),
+            'without_library' => $branchEquipment()
+                ->whereDoesntHave('taskLibraries', fn ($q) => $q->where('is_active', true))
+                ->count(),
+        ];
+    }
+
+    /**
+     * "Beban Kerja per Teknisi" — how many Pending/In Progress Tasks each
+     * person currently has claimed in this branch, top 8. Grouped in PHP
+     * (same convention as failureTrend()'s month grouping) rather than a
+     * raw SQL GROUP BY, for SQLite/Postgres parity across test and dev.
+     *
+     * @return list<array{name: string, open_count: int}>
+     */
+    private function technicianWorkload(Branch $branch): array
+    {
+        $tasks = $this->scopeEquipmentToBranch(
+            Task::query()->whereIn('status', [TaskStatus::Pending, TaskStatus::InProgress])->whereNotNull('assigned_to'),
+            $branch->id
+        )->with('assignee')->get(['assigned_to']);
+
+        return $tasks
+            ->groupBy('assigned_to')
+            ->map(fn (Collection $group) => [
+                'name' => $group->first()->assignee->name,
+                'open_count' => $group->count(),
+            ])
+            ->sortByDesc('open_count')
+            ->take(8)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Fast movers (top 5 parts by quantity issued, last 12 months — same
+     * scope as costByPart(), summing quantity instead of cost) alongside
+     * slow movers (parts that currently have stock on hand but recorded
+     * ZERO issues in that same window — "capital sitting on the shelf",
+     * a stronger signal than just "lowest issued quantity" since a part
+     * issued once barely counts as "moving" either).
+     *
+     * @return array{fast_moving: list<array{part_name:string,item_master_no:string,qty_issued:int}>, slow_moving: list<array{part_name:string,item_master_no:string,quantity_on_hand:int}>}
+     */
+    private function partMovement(Branch $branch): array
+    {
+        $since = now()->startOfMonth()->subMonths(11);
+
+        $entries = StockLedger::query()
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->where('occurred_at', '>=', $since)
+            ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
+            ->with('partStock.part')
+            ->get(['id', 'quantity_change', 'part_stock_id']);
+
+        $fastMoving = $entries
+            ->groupBy(fn (StockLedger $entry) => $entry->partStock->part_id)
+            ->map(function (Collection $group) {
+                $part = $group->first()->partStock->part;
+
+                return [
+                    'part_name' => $part->name,
+                    'item_master_no' => $part->item_master_no,
+                    'qty_issued' => $group->sum(fn (StockLedger $entry) => abs($entry->quantity_change)),
+                ];
+            })
+            ->sortByDesc('qty_issued')
+            ->take(5)
+            ->values()
+            ->all();
+
+        $slowMoving = PartStock::where('branch_id', $branch->id)
+            ->where('quantity_on_hand', '>', 0)
+            ->whereDoesntHave('ledgerEntries', fn ($q) => $q->where('type', StockLedger::TYPE_ISSUE)->where('occurred_at', '>=', $since))
+            ->with('part')
+            ->orderByDesc('quantity_on_hand')
+            ->take(5)
+            ->get()
+            ->map(fn (PartStock $stock) => [
+                'part_name' => $stock->part->name,
+                'item_master_no' => $stock->part->item_master_no,
+                'quantity_on_hand' => $stock->quantity_on_hand,
+            ])
+            ->all();
+
+        return ['fast_moving' => $fastMoving, 'slow_moving' => $slowMoving];
+    }
+
+    /**
+     * "Tren Keluar-Masuk Stok" — monthly received vs issued quantity, last
+     * 12 months, same month-bucketing pattern as failureTrend().
+     *
+     * @return list<array{month: string, in_qty: int, out_qty: int}>
+     */
+    private function stockMovementTrend(Branch $branch): array
+    {
+        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
+        $since = now()->startOfMonth()->subMonths(11);
+
+        $baseQuery = fn (string $type) => StockLedger::query()
+            ->where('type', $type)
+            ->where('occurred_at', '>=', $since)
+            ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id));
+
+        $inByMonth = $baseQuery(StockLedger::TYPE_RECEIVING)
+            ->get(['occurred_at', 'quantity_change'])
+            ->groupBy(fn (StockLedger $entry) => $entry->occurred_at->format('Y-m'))
+            ->map(fn (Collection $rows) => $rows->sum('quantity_change'));
+
+        $outByMonth = $baseQuery(StockLedger::TYPE_ISSUE)
+            ->get(['occurred_at', 'quantity_change'])
+            ->groupBy(fn (StockLedger $entry) => $entry->occurred_at->format('Y-m'))
+            ->map(fn (Collection $rows) => $rows->sum(fn (StockLedger $entry) => abs($entry->quantity_change)));
+
+        return $months->map(fn ($month) => [
+            'month' => $month,
+            'in_qty' => (int) ($inByMonth[$month] ?? 0),
+            'out_qty' => (int) ($outByMonth[$month] ?? 0),
+        ])->values()->all();
     }
 }
