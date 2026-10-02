@@ -23,6 +23,7 @@ use App\Models\TaskPartCheck;
 use App\Models\User;
 use App\Services\PartLifecycleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -67,9 +68,11 @@ class DashboardAnalyticsTest extends TestCase
             ->assertForbidden();
     }
 
-    private function fetchAnalytics(): TestResponse
+    private function fetchAnalytics(?int $year = null): TestResponse
     {
-        return $this->actingAs($this->admin)->getJson("/api/branches/{$this->branch->id}/dashboard-analytics");
+        $query = $year !== null ? '?year='.$year : '';
+
+        return $this->actingAs($this->admin)->getJson("/api/branches/{$this->branch->id}/dashboard-analytics{$query}");
     }
 
     public function test_failure_trend_counts_events_for_production_equipment(): void
@@ -720,5 +723,56 @@ class DashboardAnalyticsTest extends TestCase
 
         $this->assertSame(0, $thisMonth['scheduled_count']);
         $this->assertSame(0, $thisMonth['failure_count']);
+    }
+
+    public function test_response_includes_the_resolved_year_defaulting_to_the_current_year(): void
+    {
+        $this->assertSame((int) now()->format('Y'), $this->fetchAnalytics()->json('data.year'));
+    }
+
+    public function test_year_query_param_scopes_cost_heatmap_to_the_requested_year_not_the_current_one(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'name' => 'Line A']);
+        $machine = Machine::factory()->create(['line_id' => $line->id, 'name' => 'Mesin Press']);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+        $task = Task::factory()->create(['equipment_id' => $equipment->id]);
+        $lastYear = (int) now()->format('Y') - 1;
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -1,
+            'balance_after' => 9,
+            'unit_cost' => '40000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => Carbon::create($lastYear, 6, 15),
+        ]);
+
+        $this->assertNull(collect($this->fetchAnalytics()->json('data.cost_heatmap'))->firstWhere('line_name', 'Line A'));
+
+        $cell = collect($this->fetchAnalytics($lastYear)->json('data.cost_heatmap'))->firstWhere('line_name', 'Line A');
+        $this->assertNotNull($cell);
+        $this->assertSame('40000.00', $cell['cost']);
+    }
+
+    public function test_year_query_param_changes_the_budget_projection_year(): void
+    {
+        $lastYear = (int) now()->format('Y') - 1;
+        Budget::create([
+            'branch_id' => $this->branch->id,
+            'replacement_strategy' => 'life_based',
+            'year' => $lastYear,
+            'planned_amount' => '600000.00',
+            'corrective_amount' => '0.00',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $projection = $this->fetchAnalytics($lastYear)->json('data.budget_projection');
+
+        $this->assertSame($lastYear, $projection['year']);
+        $this->assertSame('600000.00', $projection['planned_total']);
     }
 }

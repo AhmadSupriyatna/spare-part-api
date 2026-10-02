@@ -18,6 +18,7 @@ use App\Services\BudgetRealizationService;
 use App\Services\PartLifetimeService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -41,26 +42,40 @@ class DashboardAnalyticsController extends Controller
         private readonly PartLifetimeService $lifetime,
     ) {}
 
-    public function show(Branch $branch): JsonResponse
+    /**
+     * Every time-windowed chart here is scoped to one calendar year, picked
+     * via the dashboard's year dropdown (`?year=`, defaults to the current
+     * year) — NOT a rolling trailing window. The handful of snapshot charts
+     * (installation_map, installation_sunburst, stock_value,
+     * equipment_coverage, technician_workload, at_risk_parts) describe
+     * right-now state and deliberately ignore `$year` entirely.
+     */
+    public function show(Request $request, Branch $branch): JsonResponse
     {
+        $year = (int) $request->query('year', now()->year);
+        if ($year <= 0) {
+            $year = (int) now()->year;
+        }
+
         return response()->json(['data' => [
-            'failure_trend' => $this->failureTrend($branch),
-            'cost_heatmap' => $this->costHeatmap($branch),
-            'budget_projection' => $this->budgetProjection($branch),
-            'failure_radial' => $this->failureRadial($branch),
-            'maintenance_performance' => $this->maintenancePerformance($branch),
+            'year' => $year,
+            'failure_trend' => $this->failureTrend($branch, $year),
+            'cost_heatmap' => $this->costHeatmap($branch, $year),
+            'budget_projection' => $this->budgetProjection($branch, $year),
+            'failure_radial' => $this->failureRadial($branch, $year),
+            'maintenance_performance' => $this->maintenancePerformance($branch, $year),
             'at_risk_parts' => $this->atRiskParts($branch),
             'installation_map' => $this->installationMap($branch),
-            'cost_by_part' => $this->costByPart($branch),
+            'cost_by_part' => $this->costByPart($branch, $year),
             'stock_value' => $this->stockValue($branch),
-            'pm_vs_failure_cost' => $this->pmVsFailureCost($branch),
+            'pm_vs_failure_cost' => $this->pmVsFailureCost($branch, $year),
             'equipment_coverage' => $this->equipmentCoverage($branch),
             'technician_workload' => $this->technicianWorkload($branch),
-            'part_movement' => $this->partMovement($branch),
-            'stock_movement_trend' => $this->stockMovementTrend($branch),
+            'part_movement' => $this->partMovement($branch, $year),
+            'stock_movement_trend' => $this->stockMovementTrend($branch, $year),
             'installation_sunburst' => $this->installationSunburst($branch),
-            'cost_sunburst' => $this->costSunburst($branch),
-            'scheduled_vs_failure_trend' => $this->scheduledVsFailureTrend($branch),
+            'cost_sunburst' => $this->costSunburst($branch, $year),
+            'scheduled_vs_failure_trend' => $this->scheduledVsFailureTrend($branch, $year),
         ]]);
     }
 
@@ -83,8 +98,20 @@ class DashboardAnalyticsController extends Controller
     }
 
     /**
+     * One row per month of `$year`, Jan-Dec. Shared by every month-bucketed
+     * chart in this controller instead of each re-deriving its own
+     * range(0,11)/reverse() dance.
+     *
+     * @return Collection<int, string>
+     */
+    private function monthsOfYear(int $year): Collection
+    {
+        return collect(range(1, 12))->map(fn ($m) => sprintf('%d-%02d', $year, $m));
+    }
+
+    /**
      * Branch-wide failure/breakdown count alongside part-replacement count,
-     * both last 12 months. Failure/breakdown is the same source
+     * both scoped to `$year`. Failure/breakdown is the same source
      * PublicMachineMonitoringController's per-machine version uses; the
      * replacement series counts every new PartInstallation instead (a part
      * physically going into an equipment) — deliberately simple: it counts
@@ -94,15 +121,14 @@ class DashboardAnalyticsController extends Controller
      * QR-scanned failure/breakdown install never records it), so this is a
      * "part-swap activity" trend, not a precisely-filtered one.
      */
-    private function failureTrend(Branch $branch): array
+    private function failureTrend(Branch $branch, int $year): array
     {
-        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
-        $since = now()->startOfMonth()->subMonths(11);
+        $months = $this->monthsOfYear($year);
 
         $failuresByMonth = $this->scopeEquipmentToBranch(
             PartReplacementRequest::query()
                 ->whereIn('event_type', ['failure', 'breakdown'])
-                ->where('created_at', '>=', $since),
+                ->whereYear('created_at', $year),
             $branch->id
         )
             ->get(['created_at'])
@@ -111,7 +137,7 @@ class DashboardAnalyticsController extends Controller
 
         $replacementsByMonth = PartInstallation::query()
             ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
-            ->where('installed_at', '>=', $since)
+            ->whereYear('installed_at', $year)
             ->get(['installed_at'])
             ->groupBy(fn (PartInstallation $installation) => $installation->installed_at->format('Y-m'))
             ->map(fn ($rows) => $rows->count());
@@ -121,7 +147,7 @@ class DashboardAnalyticsController extends Controller
         // cost line this trend combo-charts against the qty bars above.
         $costsByMonth = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->where('occurred_at', '>=', $since)
+            ->whereYear('occurred_at', $year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
             ->whereNotNull('unit_cost')
             ->get(['occurred_at', 'quantity_change', 'unit_cost'])
@@ -141,16 +167,16 @@ class DashboardAnalyticsController extends Controller
 
     /**
      * "Radial Map Failure" — failure/breakdown count grouped by Line then
-     * Machine (two rings), last 12 months. Same reference-resolution and
+     * Machine (two rings), scoped to `$year`. Same reference-resolution and
      * "Luar Line" bucketing rule as costHeatmap(), just counting reports
      * instead of summing cost.
      */
-    private function failureRadial(Branch $branch): array
+    private function failureRadial(Branch $branch, int $year): array
     {
         $requests = $this->scopeEquipmentToBranch(
             PartReplacementRequest::query()
                 ->whereIn('event_type', ['failure', 'breakdown'])
-                ->where('created_at', '>=', now()->startOfMonth()->subMonths(11)),
+                ->whereYear('created_at', $year),
             $branch->id
         )->with('equipment.machine.line')->get(['id', 'equipment_id']);
 
@@ -171,19 +197,19 @@ class DashboardAnalyticsController extends Controller
 
     /**
      * "% WO selesai tepat waktu vs terlambat" — every completed Task with a
-     * due_date, last 6 months, split by whether completed_at fell at or
-     * before that due_date. Tasks with no due_date (ad-hoc/breakdown work)
-     * have nothing to be "on time" against, so they're excluded rather than
+     * due_date in `$year`, split by whether completed_at fell at or before
+     * that due_date. Tasks with no due_date (ad-hoc/breakdown work) have
+     * nothing to be "on time" against, so they're excluded rather than
      * counted either way.
      */
-    private function maintenancePerformance(Branch $branch): array
+    private function maintenancePerformance(Branch $branch, int $year): array
     {
         $tasks = Task::query()
             ->whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
             ->where('status', TaskStatus::Completed)
             ->whereNotNull('due_date')
             ->whereNotNull('completed_at')
-            ->where('completed_at', '>=', now()->subMonths(6))
+            ->whereYear('completed_at', $year)
             ->get(['due_date', 'completed_at']);
 
         $onTime = $tasks->filter(fn (Task $t) => $t->completed_at->lte($t->due_date->endOfDay()))->count();
@@ -219,9 +245,9 @@ class DashboardAnalyticsController extends Controller
 
     /**
      * Actual spend (TYPE_ISSUE ledger rows, same rule as
-     * BudgetRealizationService) over the last 12 months, grouped by which
-     * Line/Machine it's traceable to through the ledger entry's polymorphic
-     * reference (a Task or a PartReplacementRequest) — mirrors
+     * BudgetRealizationService) in `$year`, grouped by which Line/Machine
+     * it's traceable to through the ledger entry's polymorphic reference (a
+     * Task or a PartReplacementRequest) — mirrors
      * PartStockController::branchLedger()'s reference resolution. An
      * outside-line Machine's equipment (no Line) and a fully standalone
      * asset (no Machine at all) both fall into a "Luar Line" line bucket,
@@ -230,11 +256,11 @@ class DashboardAnalyticsController extends Controller
      *
      * @return list<array{line_name: string, machine_name: string, cost: string}>
      */
-    private function costHeatmap(Branch $branch): array
+    private function costHeatmap(Branch $branch, int $year): array
     {
         $entries = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->where('occurred_at', '>=', now()->startOfMonth()->subMonths(11))
+            ->whereYear('occurred_at', $year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
             ->whereNotNull('unit_cost')
             ->with([
@@ -300,14 +326,14 @@ class DashboardAnalyticsController extends Controller
 
     /**
      * Same actual-spend source as costHeatmap() (TYPE_ISSUE ledger rows,
-     * last 12 months), grouped by Part instead of Line/Machine — "Peta
+     * scoped to `$year`), grouped by Part instead of Line/Machine — "Peta
      * Biaya Failure & Replacement" per-part breakdown, top 10 by cost.
      */
-    private function costByPart(Branch $branch): array
+    private function costByPart(Branch $branch, int $year): array
     {
         $entries = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->where('occurred_at', '>=', now()->startOfMonth()->subMonths(11))
+            ->whereYear('occurred_at', $year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
             ->whereNotNull('unit_cost')
             ->with('partStock.part')
@@ -335,18 +361,17 @@ class DashboardAnalyticsController extends Controller
     }
 
     /**
-     * "Proyeksi Biaya" — this year's total planned Budget (every
-     * replacement strategy summed) spread evenly across 12 months as a
-     * straight-line trajectory, plotted cumulatively against actual
-     * cumulative spend so far (BudgetRealizationService::monthlyRealization()).
-     * `actual_cumulative` is null for a month that hasn't happened yet, so
-     * the chart draws the real line stopping at "today" instead of a
+     * "Proyeksi Biaya" — `$year`'s total planned Budget (every replacement
+     * strategy summed) spread evenly across 12 months as a straight-line
+     * trajectory, plotted cumulatively against actual cumulative spend so
+     * far (BudgetRealizationService::monthlyRealization()).
+     * `actual_cumulative` is null for a month that hasn't happened yet (for
+     * a past year, every month already has; for a future year, none have),
+     * so the chart draws the real line stopping at "today" instead of a
      * misleading flat tail.
      */
-    private function budgetProjection(Branch $branch): array
+    private function budgetProjection(Branch $branch, int $year): array
     {
-        $year = (int) now()->format('Y');
-
         $plannedTotal = $branch->budgets()->where('year', $year)->get()
             ->reduce(fn (string $carry, Budget $budget) => bcadd($carry, $budget->totalAmount(), 2), '0.00');
 
@@ -398,21 +423,22 @@ class DashboardAnalyticsController extends Controller
 
     /**
      * "Sebaran Cost PM vs Failure" — same actual-spend source as
-     * costHeatmap()/costByPart() (TYPE_ISSUE ledger rows, last 12 months),
-     * split into two buckets by what the ledger entry's reference actually
-     * is: a Task scheduled from a Task Library or Part Lifetime trigger is
-     * planned work (PM); an ad-hoc/breakdown Task, a PartReplacementRequest
-     * (the public breakdown QR flow), or an Fp3Request (repair/fabrication
-     * request) are all reactive work (Failure). A null/unresolvable
-     * reference is excluded, same as costHeatmap()'s own rule.
+     * costHeatmap()/costByPart() (TYPE_ISSUE ledger rows, scoped to
+     * `$year`), split into two buckets by what the ledger entry's reference
+     * actually is: a Task scheduled from a Task Library or Part Lifetime
+     * trigger is planned work (PM); an ad-hoc/breakdown Task, a
+     * PartReplacementRequest (the public breakdown QR flow), or an
+     * Fp3Request (repair/fabrication request) are all reactive work
+     * (Failure). A null/unresolvable reference is excluded, same as
+     * costHeatmap()'s own rule.
      *
      * @return array{pm_cost: string, failure_cost: string}
      */
-    private function pmVsFailureCost(Branch $branch): array
+    private function pmVsFailureCost(Branch $branch, int $year): array
     {
         $entries = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->where('occurred_at', '>=', now()->startOfMonth()->subMonths(11))
+            ->whereYear('occurred_at', $year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
             ->whereNotNull('unit_cost')
             ->with(['reference' => fn ($morphTo) => $morphTo->morphWith([
@@ -492,22 +518,20 @@ class DashboardAnalyticsController extends Controller
     }
 
     /**
-     * Fast movers (top 5 parts by quantity issued, last 12 months — same
-     * scope as costByPart(), summing quantity instead of cost) alongside
-     * slow movers (parts that currently have stock on hand but recorded
-     * ZERO issues in that same window — "capital sitting on the shelf",
-     * a stronger signal than just "lowest issued quantity" since a part
-     * issued once barely counts as "moving" either).
+     * Fast movers (top 5 parts by quantity issued in `$year` — same scope as
+     * costByPart(), summing quantity instead of cost) alongside slow movers
+     * (parts that currently have stock on hand but recorded ZERO issues in
+     * that same year — "capital sitting on the shelf", a stronger signal
+     * than just "lowest issued quantity" since a part issued once barely
+     * counts as "moving" either).
      *
      * @return array{fast_moving: list<array{part_name:string,item_master_no:string,qty_issued:int}>, slow_moving: list<array{part_name:string,item_master_no:string,quantity_on_hand:int}>}
      */
-    private function partMovement(Branch $branch): array
+    private function partMovement(Branch $branch, int $year): array
     {
-        $since = now()->startOfMonth()->subMonths(11);
-
         $entries = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->where('occurred_at', '>=', $since)
+            ->whereYear('occurred_at', $year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
             ->with('partStock.part')
             ->get(['id', 'quantity_change', 'part_stock_id']);
@@ -530,7 +554,7 @@ class DashboardAnalyticsController extends Controller
 
         $slowMoving = PartStock::where('branch_id', $branch->id)
             ->where('quantity_on_hand', '>', 0)
-            ->whereDoesntHave('ledgerEntries', fn ($q) => $q->where('type', StockLedger::TYPE_ISSUE)->where('occurred_at', '>=', $since))
+            ->whereDoesntHave('ledgerEntries', fn ($q) => $q->where('type', StockLedger::TYPE_ISSUE)->whereYear('occurred_at', $year))
             ->with('part')
             ->orderByDesc('quantity_on_hand')
             ->take(5)
@@ -546,19 +570,18 @@ class DashboardAnalyticsController extends Controller
     }
 
     /**
-     * "Tren Keluar-Masuk Stok" — monthly received vs issued quantity, last
-     * 12 months, same month-bucketing pattern as failureTrend().
+     * "Tren Keluar-Masuk Stok" — monthly received vs issued quantity,
+     * scoped to `$year`.
      *
      * @return list<array{month: string, in_qty: int, out_qty: int}>
      */
-    private function stockMovementTrend(Branch $branch): array
+    private function stockMovementTrend(Branch $branch, int $year): array
     {
-        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
-        $since = now()->startOfMonth()->subMonths(11);
+        $months = $this->monthsOfYear($year);
 
         $baseQuery = fn (string $type) => StockLedger::query()
             ->where('type', $type)
-            ->where('occurred_at', '>=', $since)
+            ->whereYear('occurred_at', $year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id));
 
         $inByMonth = $baseQuery(StockLedger::TYPE_RECEIVING)
@@ -624,21 +647,18 @@ class DashboardAnalyticsController extends Controller
 
     /**
      * "Cost per Line/Equipment" sunburst — same actual-spend source as
-     * costHeatmap() (TYPE_ISSUE ledger rows), but scoped to the current
-     * calendar year (Jan 1 - today) instead of a rolling 12 months — this is
-     * the one chart on this dashboard meant to read as "spend so far this
-     * year", not a trailing window — and kept flat per
-     * Line/Machine/Equipment/Part leaf instead of pre-aggregated to
+     * costHeatmap() (TYPE_ISSUE ledger rows), scoped to `$year`, kept flat
+     * per Line/Machine/Equipment/Part leaf instead of pre-aggregated to
      * Line/Machine, so the frontend can drill the sunburst past Machine into
      * Equipment and Part, the same four rings as installationSunburst().
      *
      * @return list<array{line_name: string, machine_name: string, equipment_name: string, part_name: string, cost: string}>
      */
-    private function costSunburst(Branch $branch): array
+    private function costSunburst(Branch $branch, int $year): array
     {
         $entries = StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->whereYear('occurred_at', now()->year)
+            ->whereYear('occurred_at', $year)
             ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
             ->whereNotNull('unit_cost')
             ->with([
@@ -684,8 +704,8 @@ class DashboardAnalyticsController extends Controller
     }
 
     /**
-     * "Tren Scheduled vs Failure" — every PartInstallation in the last 12
-     * months, classified by HOW it was created rather than re-using
+     * "Tren Scheduled vs Failure" — every PartInstallation in `$year`,
+     * classified by HOW it was created rather than re-using
      * failureTrend()'s counts (that failure_count is breakdown *reports*,
      * this is actually-completed installs): a TaskPartCheck pointing its
      * part_installation_id at the row means a PM task replaced it
@@ -699,13 +719,12 @@ class DashboardAnalyticsController extends Controller
      *
      * @return list<array{month: string, scheduled_count: int, failure_count: int}>
      */
-    private function scheduledVsFailureTrend(Branch $branch): array
+    private function scheduledVsFailureTrend(Branch $branch, int $year): array
     {
-        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
-        $since = now()->startOfMonth()->subMonths(11);
+        $months = $this->monthsOfYear($year);
 
         $installations = $this->scopeEquipmentToBranch(
-            PartInstallation::query()->where('installed_at', '>=', $since),
+            PartInstallation::query()->whereYear('installed_at', $year),
             $branch->id
         )->get(['id', 'installed_at']);
 
