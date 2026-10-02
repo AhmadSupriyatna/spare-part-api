@@ -187,7 +187,7 @@ class TaskController extends Controller
                         $q->orWhereNull('assigned_to');
                     }
                 })
-                ->with(['equipment.machine.line.branch', 'assignee', 'partStock.part', 'partChecks.part', 'checklistItems'])
+                ->with(['equipment.machine.line.branch', 'assignee', 'taskLibrary', 'partStock.part', 'partChecks.part', 'checklistItems'])
                 // Active work (pending/in_progress) always floats above
                 // completed/cancelled history, but within that group it's
                 // purely nearest-due-date-first — status doesn't jump a

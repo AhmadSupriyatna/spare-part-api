@@ -20,6 +20,7 @@ class TaskResource extends JsonResource
             'id' => $this->id,
             'work_order_id' => $this->work_order_id,
             'task_library_id' => $this->task_library_id,
+            'estimated_duration_minutes' => $this->whenLoaded('taskLibrary', fn () => $this->taskLibrary?->estimated_duration_minutes),
             'equipment_id' => $this->equipment_id,
             'equipment_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->name),
             'machine_name' => $this->whenLoaded('equipment', fn () => $this->equipment?->machine?->name),
