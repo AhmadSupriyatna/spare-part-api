@@ -52,6 +52,35 @@ class AddLineKwhRequest extends FormRequest
                     }
                 },
             ],
+            // kVA is cumulative just like kWh (same mode, same reading/
+            // direct duality) but optional — a row can still be logged with
+            // kWh alone. PF is never submitted; it's derived from this and
+            // `value` at write time (see LineController::addKwh()).
+            'kva_value' => [
+                'nullable',
+                'integer',
+                'min:0',
+                function ($attribute, $value, $fail) {
+                    if ($value === null || CompanySetting::current()->kwh_input_mode !== 'reading') {
+                        return;
+                    }
+
+                    $line = $this->route('line');
+                    $weekStart = $this->input('for_date') ? Carbon::parse($this->input('for_date'))->startOfWeek(Carbon::MONDAY) : null;
+                    if (! $line || ! $weekStart) {
+                        return;
+                    }
+
+                    $previous = LineKwhLog::where('line_id', $line->id)
+                        ->where('week_start_date', '<', $weekStart->toDateString())
+                        ->orderByDesc('week_start_date')
+                        ->value('new_kva_reading');
+
+                    if ($previous !== null && $value < $previous) {
+                        $fail("Reading kVA tidak boleh kurang dari reading minggu sebelumnya ({$previous} kVA).");
+                    }
+                },
+            ],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

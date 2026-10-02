@@ -14,6 +14,10 @@ class LineKwhLog extends Model
         'previous_reading',
         'new_reading',
         'kwh_used',
+        'previous_kva_reading',
+        'new_kva_reading',
+        'kva_used',
+        'pf',
         'recorded_by',
         'notes',
     ];
@@ -32,6 +36,10 @@ class LineKwhLog extends Model
             'previous_reading' => 'integer',
             'new_reading' => 'integer',
             'kwh_used' => 'integer',
+            'previous_kva_reading' => 'integer',
+            'new_kva_reading' => 'integer',
+            'kva_used' => 'integer',
+            'pf' => 'float',
         ];
     }
 

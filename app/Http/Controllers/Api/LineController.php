@@ -108,7 +108,9 @@ class LineController extends Controller
      * onto the row itself (`mode`) so a later mode switch never
      * reinterprets older entries: "reading" treats it as the meter's
      * absolute value (previous/new/kwh_used all derived, like
-     * addRuntime()); "direct" treats it as that week's usage as-is.
+     * addRuntime()); "direct" treats it as that week's usage as-is. `kva_value`
+     * is optional and follows the identical reading/direct duality for kVA;
+     * `pf` (Power Factor) is never submitted — derived here as kwh_used/kva_used.
      */
     public function addKwh(AddLineKwhRequest $request, ProductionLine $line): LineKwhLogResource
     {
@@ -131,11 +133,33 @@ class LineController extends Controller
                 ->value('new_reading') ?? 0;
             $newReading = $data['value'];
             $kwhUsed = $newReading - $previousReading;
+
+            if (array_key_exists('kva_value', $data) && $data['kva_value'] !== null) {
+                $previousKvaReading = LineKwhLog::where('line_id', $line->id)
+                    ->where('week_start_date', '<', $weekStart)
+                    ->orderByDesc('week_start_date')
+                    ->value('new_kva_reading') ?? 0;
+                $newKvaReading = $data['kva_value'];
+                $kvaUsed = $newKvaReading - $previousKvaReading;
+            } else {
+                $previousKvaReading = null;
+                $newKvaReading = null;
+                $kvaUsed = null;
+            }
         } else {
             $previousReading = null;
             $newReading = null;
             $kwhUsed = $data['value'];
+
+            $previousKvaReading = null;
+            $newKvaReading = null;
+            $kvaUsed = $data['kva_value'] ?? null;
         }
+
+        // Power Factor = real power / apparent power — derived from this
+        // week's kWh and kVA usage, never a typed-in value, so it's null
+        // whenever kVA wasn't entered (or came out to 0).
+        $pf = ($kvaUsed !== null && $kvaUsed > 0) ? round($kwhUsed / $kvaUsed, 3) : null;
 
         $log = LineKwhLog::updateOrCreate(
             ['line_id' => $line->id, 'week_start_date' => $weekStart],
@@ -144,6 +168,10 @@ class LineController extends Controller
                 'previous_reading' => $previousReading,
                 'new_reading' => $newReading,
                 'kwh_used' => $kwhUsed,
+                'previous_kva_reading' => $previousKvaReading,
+                'new_kva_reading' => $newKvaReading,
+                'kva_used' => $kvaUsed,
+                'pf' => $pf,
                 'recorded_by' => $request->user()->id,
                 'notes' => $data['notes'] ?? $existingNotes,
             ],

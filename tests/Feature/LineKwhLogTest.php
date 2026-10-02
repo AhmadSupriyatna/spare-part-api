@@ -140,6 +140,82 @@ class LineKwhLogTest extends TestCase
         $response->assertJsonPath('data.notes', 'Dibaca shift pagi');
     }
 
+    public function test_direct_mode_stores_kva_as_is_and_derives_pf(): void
+    {
+        CompanySetting::current()->update(['kwh_input_mode' => 'direct']);
+
+        $response = $this->actingAs($this->engineer)->postJson("/api/lines/{$this->line->id}/kwh", [
+            'for_date' => '2026-10-05',
+            'value' => 850,
+            'kva_value' => 1000,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('data.kwh_used', 850);
+        $response->assertJsonPath('data.kva_used', 1000);
+        $response->assertJsonPath('data.previous_kva_reading', null);
+        $response->assertJsonPath('data.new_kva_reading', null);
+        $response->assertJsonPath('data.pf', 0.85);
+    }
+
+    public function test_reading_mode_computes_kva_delta_and_derives_pf(): void
+    {
+        CompanySetting::current()->update(['kwh_input_mode' => 'reading']);
+
+        $this->actingAs($this->engineer)->postJson("/api/lines/{$this->line->id}/kwh", [
+            'for_date' => '2026-10-05',
+            'value' => 5000,
+            'kva_value' => 6000,
+        ])->assertCreated();
+
+        $response = $this->actingAs($this->engineer)->postJson("/api/lines/{$this->line->id}/kwh", [
+            'for_date' => '2026-10-12',
+            'value' => 5800,
+            'kva_value' => 6940,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('data.previous_kva_reading', 6000);
+        $response->assertJsonPath('data.new_kva_reading', 6940);
+        $response->assertJsonPath('data.kva_used', 940);
+        // kwh_used = 800, kva_used = 940 -> pf = 0.851 (rounded to 3 decimals)
+        $response->assertJsonPath('data.pf', 0.851);
+    }
+
+    public function test_kva_is_optional_and_pf_stays_null_without_it(): void
+    {
+        CompanySetting::current()->update(['kwh_input_mode' => 'direct']);
+
+        $response = $this->actingAs($this->engineer)->postJson("/api/lines/{$this->line->id}/kwh", [
+            'for_date' => '2026-10-05',
+            'value' => 850,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('data.kva_used', null);
+        $response->assertJsonPath('data.pf', null);
+    }
+
+    public function test_reading_mode_rejects_a_kva_value_lower_than_the_previous_week(): void
+    {
+        CompanySetting::current()->update(['kwh_input_mode' => 'reading']);
+
+        $this->actingAs($this->engineer)->postJson("/api/lines/{$this->line->id}/kwh", [
+            'for_date' => '2026-10-05',
+            'value' => 5000,
+            'kva_value' => 6000,
+        ])->assertCreated();
+
+        $response = $this->actingAs($this->engineer)->postJson("/api/lines/{$this->line->id}/kwh", [
+            'for_date' => '2026-10-12',
+            'value' => 5800,
+            'kva_value' => 5000,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('kva_value');
+    }
+
     public function test_kwh_logs_are_listed_for_the_line(): void
     {
         CompanySetting::current()->update(['kwh_input_mode' => 'direct']);
