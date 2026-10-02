@@ -127,6 +127,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::get('/lines/{line}/machines', [MachineController::class, 'index']);
     Route::get('/machines/{machine}', [MachineController::class, 'show']);
     Route::get('/machines/{machine}/summary', [MachineController::class, 'summary']);
+    Route::get('/machines/{machine}/calendar', [MachineController::class, 'calendar']);
     Route::get('/machines/{machine}/equipment', [EquipmentController::class, 'index']);
     Route::get('/equipment/{equipment}', [EquipmentController::class, 'show']);
     // Phase 3B "Asset Outside Line" — an asset with no Line/Machine at all.

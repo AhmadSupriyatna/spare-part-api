@@ -45,6 +45,8 @@ class PublicMachineMonitoringController extends Controller
             'monthly_consumption_trend' => $data['monthly_consumption_trend'],
             'top_parts_consumed' => $data['top_parts_consumed'],
             'historical_part_lifetime' => $data['historical_part_lifetime'],
+            'line_runtime_hours' => $data['line_runtime_hours'],
+            'passport_install_history' => $data['passport_install_history'],
         ]]);
     }
 }

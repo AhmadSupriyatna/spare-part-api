@@ -12,11 +12,15 @@ use App\Http\Resources\PartInstallationResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Branch;
 use App\Models\Machine;
+use App\Models\PartReplacementRequest;
 use App\Models\ProductionLine;
+use App\Models\Task;
 use App\Services\MachineSummaryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 
 class MachineController extends Controller
 {
@@ -91,8 +95,52 @@ class MachineController extends Controller
             'monthly_consumption_trend' => $data['monthly_consumption_trend'],
             'top_parts_consumed' => $data['top_parts_consumed'],
             'historical_part_lifetime' => $data['historical_part_lifetime'],
+            'line_runtime_hours' => $data['line_runtime_hours'],
+            'passport_install_history' => $data['passport_install_history'],
             'installed_part_value' => $data['installed_part_value'],
             'cost_by_equipment_this_year' => $data['cost_by_equipment_this_year'],
+        ]]);
+    }
+
+    /**
+     * Machine Detail's mini calendar — one calendar month's PM schedule
+     * (any Task status, so a completed/cancelled WO still shows where it
+     * fell) plus failure/breakdown events, keyed by date. Deliberately its
+     * own month-scoped endpoint rather than folded into summary() (which
+     * has no month concept) — authenticated only, like the rest of Machine
+     * Detail's deeper drill-downs.
+     */
+    public function calendar(Request $request, Machine $machine): JsonResponse
+    {
+        $month = Carbon::parse($request->query('month', now()->format('Y-m')).'-01');
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
+        $equipmentIds = $machine->equipment()->pluck('id');
+
+        $tasks = Task::query()
+            ->whereIn('equipment_id', $equipmentIds)
+            ->whereBetween('due_date', [$start, $end])
+            ->get(['id', 'due_date', 'title', 'status']);
+
+        $failures = PartReplacementRequest::query()
+            ->whereIn('equipment_id', $equipmentIds)
+            ->whereIn('event_type', ['failure', 'breakdown'])
+            ->whereBetween('created_at', [$start, $end])
+            ->get(['created_at']);
+
+        $days = [];
+        foreach ($tasks as $task) {
+            $key = $task->due_date->format('Y-m-d');
+            $days[$key]['pm'][] = ['id' => $task->id, 'title' => $task->title, 'status' => $task->status];
+        }
+        foreach ($failures as $failure) {
+            $key = $failure->created_at->format('Y-m-d');
+            $days[$key]['failure_count'] = ($days[$key]['failure_count'] ?? 0) + 1;
+        }
+
+        return response()->json(['data' => [
+            'month' => $start->format('Y-m'),
+            'days' => $days,
         ]]);
     }
 

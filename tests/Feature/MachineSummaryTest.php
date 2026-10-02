@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Enums\PartRepairDisposition;
 use App\Enums\UserRole;
 use App\Models\Equipment;
 use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartInstallation;
+use App\Models\PartRepair;
 use App\Models\PartStock;
+use App\Models\PartUnit;
 use App\Models\ProductionLine;
 use App\Models\StockLedger;
 use App\Models\Task;
@@ -168,5 +171,64 @@ class MachineSummaryTest extends TestCase
         $row = collect($response->json('data.historical_part_lifetime'))->firstWhere('part_name', 'Bearing');
         $this->assertSame(1000, $row['average_runtime_hours']);
         $this->assertSame(1, $row['sample_count']);
+    }
+
+    public function test_summary_includes_the_lines_running_hours(): void
+    {
+        $line = ProductionLine::factory()->create(['runtime_hours' => 4500]);
+        $this->admin->branches()->attach($line->branch_id);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+
+        $response = $this->actingAs($this->admin)->getJson("/api/machines/{$machine->id}/summary");
+
+        $response->assertOk();
+        $this->assertSame(4500, $response->json('data.line_runtime_hours'));
+    }
+
+    public function test_summary_flags_an_installation_whose_unit_was_repaired(): void
+    {
+        $line = ProductionLine::factory()->create();
+        $this->admin->branches()->attach($line->branch_id);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+        $unit = PartUnit::create(['part_id' => $part->id, 'unit_code' => 'A', 'status' => 'in_service']);
+        $installation = PartInstallation::create([
+            'equipment_id' => $equipment->id,
+            'part_id' => $part->id,
+            'part_unit_id' => $unit->id,
+        ]);
+        PartRepair::create([
+            'part_unit_id' => $unit->id,
+            'part_installation_id' => $installation->id,
+            'removed_at' => now()->subDays(10),
+            'disposition' => PartRepairDisposition::Repaired,
+        ]);
+
+        $response = $this->actingAs($this->admin)->getJson("/api/machines/{$machine->id}/summary");
+
+        $response->assertOk();
+        $row = collect($response->json('data.installations'))->firstWhere('id', $installation->id);
+        $this->assertTrue($row['was_repaired']);
+    }
+
+    public function test_summary_includes_passport_install_history_for_has_passport_parts_only(): void
+    {
+        $line = ProductionLine::factory()->create();
+        $this->admin->branches()->attach($line->branch_id);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $passportPart = Part::factory()->create(['name' => 'Sensor', 'has_passport' => true]);
+        $regularPart = Part::factory()->create(['name' => 'Baut']);
+        $unit = PartUnit::create(['part_id' => $passportPart->id, 'unit_code' => 'A', 'status' => 'in_service']);
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $passportPart->id, 'part_unit_id' => $unit->id]);
+        PartInstallation::create(['equipment_id' => $equipment->id, 'part_id' => $regularPart->id]);
+
+        $response = $this->actingAs($this->admin)->getJson("/api/machines/{$machine->id}/summary");
+
+        $response->assertOk();
+        $history = collect($response->json('data.passport_install_history'));
+        $this->assertTrue($history->contains('part_name', 'Sensor'));
+        $this->assertFalse($history->contains('part_name', 'Baut'));
     }
 }

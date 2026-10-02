@@ -41,7 +41,7 @@ class MachineSummaryService
         $installations = PartInstallation::query()
             ->whereIn('equipment_id', $equipmentIds)
             ->whereNull('removed_at')
-            ->with(['equipment', 'part', 'partUnit'])
+            ->with(['equipment', 'part', 'partUnit.repairs'])
             ->get();
 
         // startOfMonth() before subMonths() — anchoring on day 1 avoids
@@ -85,6 +85,12 @@ class MachineSummaryService
             // (removed_at set) installation cycles. Safe on the public page
             // too, but currently only rendered on Machine Detail.
             'historical_part_lifetime' => $this->historicalPartLifetime($equipmentIds),
+            // The Line's own running hours, not this Machine's — a Machine
+            // has no runtime-hours source of its own (see
+            // PartInstallation::ageInRuntimeHours()). Null for an
+            // outside-line Machine, which has no Line to read from.
+            'line_runtime_hours' => $machine->line?->runtime_hours,
+            'passport_install_history' => $this->passportInstallHistory($equipmentIds),
         ];
 
         if ($includeCost) {
@@ -296,6 +302,39 @@ class MachineSummaryService
                 ];
             })
             ->values()
+            ->all();
+    }
+
+    /**
+     * Every installation cycle (active or already removed) of a
+     * has_passport Part on this Machine's equipment — unlike the regular
+     * `installations` list (active only, any part), this is the full
+     * physical-unit history for Passport parts specifically, since each
+     * unit's own identity (unit_code, arrival date) is the point of
+     * tracking it individually in the first place.
+     *
+     * @param  Collection<int, int>  $equipmentIds
+     * @return list<array<string, mixed>>
+     */
+    private function passportInstallHistory(Collection $equipmentIds): array
+    {
+        return PartInstallation::query()
+            ->whereIn('equipment_id', $equipmentIds)
+            ->whereHas('part', fn ($q) => $q->where('has_passport', true))
+            ->with(['equipment', 'part', 'partUnit'])
+            ->orderByDesc('installed_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (PartInstallation $installation) => [
+                'id' => $installation->id,
+                'equipment_id' => $installation->equipment_id,
+                'equipment_name' => $installation->equipment?->name,
+                'part_name' => $installation->part?->name,
+                'unit_code' => $installation->partUnit?->unit_code,
+                'installed_at' => $installation->installed_at,
+                'removed_at' => $installation->removed_at,
+                'is_active' => $installation->isActive(),
+            ])
             ->all();
     }
 }

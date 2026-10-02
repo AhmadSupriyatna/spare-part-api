@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\PartRepairDisposition;
 use App\Models\PartInstallation;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -34,8 +35,14 @@ class PartInstallationResource extends JsonResource
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),
+            'has_passport' => $this->whenLoaded('part', fn () => (bool) $this->part?->has_passport),
             'part_unit_id' => $this->part_unit_id,
             'unit_code' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->unit_code),
+            // Whether the CURRENTLY installed unit has ever come back from a
+            // successful repair — a refurbished unit, not a factory-new one.
+            'was_repaired' => $this->partUnit
+                ? $this->partUnit->repairs->contains(fn ($repair) => $repair->disposition === PartRepairDisposition::Repaired)
+                : false,
             'slot_label' => $this->slot_label,
             'estimated_lifetime_hours' => $this->whenLoaded('part', fn () => $this->part?->estimated_lifetime_hours),
             'installed_at' => $this->installed_at,
