@@ -192,12 +192,14 @@ class DashboardAnalyticsController extends Controller
     /**
      * "Life Based Part Performance" — the same at-risk list
      * PartLifetimeService already computes for auto-scheduling, just
-     * surfaced read-only here, capped to the 8 closest to end-of-life.
+     * surfaced read-only here, capped to the 20 closest to end-of-life (the
+     * frontend renders this as a scrollable list, not a fixed-size chart,
+     * so it can afford to show more than a handful).
      */
     private function atRiskParts(Branch $branch): array
     {
         return $this->lifetime->atRiskInstallations($branch->id)
-            ->take(8)
+            ->take(20)
             ->map(fn (PartInstallation $installation) => [
                 'part_name' => $installation->part->name,
                 'item_master_no' => $installation->part->item_master_no,
