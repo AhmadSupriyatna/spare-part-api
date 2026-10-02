@@ -9,7 +9,9 @@ use App\Models\Machine;
 use App\Models\Part;
 use App\Models\PartInstallation;
 use App\Models\PartReplacementRequest;
+use App\Models\PartStock;
 use App\Models\ProductionLine;
+use App\Models\StockLedger;
 use App\Models\Task;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -131,5 +133,40 @@ class PublicMachineMonitoringTest extends TestCase
         $currentMonth = now()->format('Y-m');
         $trend = collect($response->json('data.monthly_failure_trend'))->keyBy('month');
         $this->assertSame(1, $trend[$currentMonth]['count']);
+    }
+
+    public function test_monitoring_includes_part_consumption_by_quantity_but_never_cost(): void
+    {
+        $line = ProductionLine::factory()->create();
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create(['name' => 'Bearing']);
+        $stock = PartStock::factory()->create(['part_id' => $part->id]);
+        $task = Task::factory()->create(['equipment_id' => $equipment->id]);
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -3,
+            'balance_after' => 7,
+            'unit_cost' => '75000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now(),
+        ]);
+
+        $response = $this->getJson("/api/public/machines/{$machine->id}/monitoring");
+
+        $response->assertOk();
+        $currentMonth = now()->format('Y-m');
+        $trend = collect($response->json('data.monthly_consumption_trend'))->keyBy('month');
+        $this->assertSame(3, $trend[$currentMonth]['quantity']);
+        $this->assertArrayNotHasKey('cost', $trend[$currentMonth]);
+
+        $topParts = collect($response->json('data.top_parts_consumed'));
+        $bearingRow = $topParts->firstWhere('part_name', 'Bearing');
+        $this->assertSame(3, $bearingRow['quantity']);
+        $this->assertArrayNotHasKey('cost', $bearingRow);
+        $response->assertJsonMissing(['installed_part_value']);
     }
 }

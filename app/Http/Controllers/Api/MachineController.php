@@ -8,14 +8,20 @@ use App\Http\Requests\StoreMachineRequest;
 use App\Http\Requests\StoreOutsideLineMachineRequest;
 use App\Http\Requests\UpdateMachineRequest;
 use App\Http\Resources\MachineResource;
+use App\Http\Resources\PartInstallationResource;
+use App\Http\Resources\TaskResource;
 use App\Models\Branch;
 use App\Models\Machine;
 use App\Models\ProductionLine;
+use App\Services\MachineSummaryService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
 class MachineController extends Controller
 {
+    public function __construct(private MachineSummaryService $summary) {}
+
     public function index(ProductionLine $line): AnonymousResourceCollection
     {
         return MachineResource::collection($line->machines()->orderBy('name')->get());
@@ -60,6 +66,32 @@ class MachineController extends Controller
     public function show(Machine $machine): MachineResource
     {
         return new MachineResource($machine->load(['line', 'branch']));
+    }
+
+    /**
+     * Machine Detail's dashboard data — the authenticated twin of
+     * PublicMachineMonitoringController::show(), with cost fields included
+     * (installed_part_value, per-month/per-part cost) since this route sits
+     * behind auth, unlike the QR-scan monitoring page.
+     */
+    public function summary(Machine $machine): JsonResponse
+    {
+        $machine->load(['line.branch', 'branch']);
+
+        $data = $this->summary->build($machine, includeCost: true);
+
+        return response()->json(['data' => [
+            'machine' => new MachineResource($machine),
+            'equipment_count' => $data['equipment_count'],
+            'upcoming_tasks' => TaskResource::collection($data['upcoming_tasks']),
+            'overdue_task_count' => $data['overdue_task_count'],
+            'installations' => PartInstallationResource::collection($data['installations']),
+            'monthly_failure_trend' => $data['monthly_failure_trend'],
+            'average_lifetime_hours' => $data['average_lifetime_hours'],
+            'monthly_consumption_trend' => $data['monthly_consumption_trend'],
+            'top_parts_consumed' => $data['top_parts_consumed'],
+            'installed_part_value' => $data['installed_part_value'],
+        ]]);
     }
 
     public function update(UpdateMachineRequest $request, Machine $machine): MachineResource

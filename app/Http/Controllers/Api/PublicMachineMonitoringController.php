@@ -2,15 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\TaskStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MachineResource;
 use App\Http\Resources\PartInstallationResource;
 use App\Http\Resources\TaskResource;
 use App\Models\Machine;
-use App\Models\PartInstallation;
-use App\Models\PartReplacementRequest;
-use App\Models\Task;
+use App\Services\MachineSummaryService;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -23,61 +20,30 @@ use Illuminate\Http\JsonResponse;
  * (MachineResource, TaskResource, PartInstallationResource) rather than a
  * separate cut-down shape — none of them expose cost/price data, matching
  * the precedent already set by PublicBreakdownController reusing
- * EquipmentResource/PartResource/MachineResource as-is.
+ * EquipmentResource/PartResource/MachineResource as-is. The cost-bearing
+ * fields (installed_part_value, per-month/per-part cost) are never computed
+ * here at all — see MachineSummaryService's `$includeCost = false`.
  */
 class PublicMachineMonitoringController extends Controller
 {
+    public function __construct(private MachineSummaryService $summary) {}
+
     public function show(Machine $machine): JsonResponse
     {
         $machine->load(['line.branch', 'branch']);
 
-        $equipmentIds = $machine->equipment()->pluck('id');
-
-        $tasks = Task::query()
-            ->whereIn('equipment_id', $equipmentIds)
-            ->whereIn('status', [TaskStatus::Pending, TaskStatus::InProgress])
-            ->with(['equipment', 'assignee'])
-            ->orderBy('due_date')
-            ->limit(20)
-            ->get();
-
-        $installations = PartInstallation::query()
-            ->whereIn('equipment_id', $equipmentIds)
-            ->whereNull('removed_at')
-            ->with(['equipment', 'part', 'partUnit'])
-            ->get();
-
-        // startOfMonth() before subMonths() — anchoring on day 1 avoids
-        // Carbon overflowing past a shorter month (e.g. Aug 31 minus a
-        // month landing on "Jul 31", or a day-29-31 date subtracted onto a
-        // non-leap February), which would otherwise skip a month and
-        // duplicate another in the resulting Y-m list.
-        $months = collect(range(0, 11))->map(fn ($i) => now()->startOfMonth()->subMonths($i)->format('Y-m'))->reverse()->values();
-        $failuresByMonth = PartReplacementRequest::query()
-            ->whereIn('equipment_id', $equipmentIds)
-            ->whereIn('event_type', ['failure', 'breakdown'])
-            ->where('created_at', '>=', now()->subMonths(11)->startOfMonth())
-            ->get(['created_at'])
-            ->groupBy(fn (PartReplacementRequest $request) => $request->created_at->format('Y-m'))
-            ->map(fn ($rows) => $rows->count());
-
-        $monthlyFailureTrend = $months->map(fn ($month) => [
-            'month' => $month,
-            'count' => (int) ($failuresByMonth[$month] ?? 0),
-        ])->values();
-
-        $lifetimeHours = $installations
-            ->map(fn (PartInstallation $installation) => $installation->ageInRuntimeHours())
-            ->filter(fn ($hours) => $hours !== null);
+        $data = $this->summary->build($machine, includeCost: false);
 
         return response()->json(['data' => [
             'machine' => new MachineResource($machine),
-            'equipment_count' => $equipmentIds->count(),
-            'upcoming_tasks' => TaskResource::collection($tasks),
-            'overdue_task_count' => $tasks->filter(fn (Task $task) => $task->isOverdue())->count(),
-            'installations' => PartInstallationResource::collection($installations),
-            'monthly_failure_trend' => $monthlyFailureTrend,
-            'average_lifetime_hours' => $lifetimeHours->isEmpty() ? null : (int) round($lifetimeHours->avg()),
+            'equipment_count' => $data['equipment_count'],
+            'upcoming_tasks' => TaskResource::collection($data['upcoming_tasks']),
+            'overdue_task_count' => $data['overdue_task_count'],
+            'installations' => PartInstallationResource::collection($data['installations']),
+            'monthly_failure_trend' => $data['monthly_failure_trend'],
+            'average_lifetime_hours' => $data['average_lifetime_hours'],
+            'monthly_consumption_trend' => $data['monthly_consumption_trend'],
+            'top_parts_consumed' => $data['top_parts_consumed'],
         ]]);
     }
 }
