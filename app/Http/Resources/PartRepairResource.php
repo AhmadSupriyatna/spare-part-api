@@ -26,6 +26,7 @@ class PartRepairResource extends JsonResource
             'part_installation_id' => $this->part_installation_id,
             'item_master_no' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->part?->item_master_no),
             'replacement_strategy' => $this->whenLoaded('partUnit', fn () => $this->partUnit?->part?->replacement_strategy),
+            'has_passport' => $this->whenLoaded('partUnit', fn () => (bool) $this->partUnit?->part?->has_passport),
             'equipment_name' => $this->whenLoaded(
                 'partInstallation',
                 fn () => $this->partInstallation?->equipment?->name
