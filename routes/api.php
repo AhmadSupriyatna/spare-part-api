@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\PublicPartUnitController;
 use App\Http\Controllers\Api\RackController;
 use App\Http\Controllers\Api\RackLevelController;
 use App\Http\Controllers\Api\SearchController;
+use App\Http\Controllers\Api\StockLedgerController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TaskLibraryChecklistItemController;
@@ -228,6 +229,8 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::post('/part-stocks/{partStock}/adjust', [PartStockController::class, 'adjust'])
             ->middleware('throttle:stock-adjustment');
         Route::put('/part-stocks/{partStock}/location', [PartStockController::class, 'updateLocation']);
+        Route::put('/stock-ledger/{stockLedger}/receiving', [StockLedgerController::class, 'updateReceiving']);
+        Route::delete('/stock-ledger/{stockLedger}/receiving', [StockLedgerController::class, 'destroyReceiving']);
 
         Route::post('/branches/{branch}/lines', [LineController::class, 'store']);
         Route::put('/lines/{line}', [LineController::class, 'update']);

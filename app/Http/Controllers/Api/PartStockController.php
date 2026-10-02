@@ -478,6 +478,24 @@ class PartStockController extends Controller
             )->values();
         }
 
+        // Which rows the frontend may offer Edit/Delete on — a receiving
+        // entry only if it's the true latest entry (any type) for its
+        // part_stock, looked up UNFILTERED by this request's own date/line
+        // narrowing (a date-range filter must never make an older row look
+        // editable just because newer rows fell outside the window).
+        $partStockIds = $entries->pluck('part_stock_id')->unique()->values();
+        $latestEditableIds = StockLedger::whereIn('part_stock_id', $partStockIds)
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->get(['id', 'part_stock_id', 'type'])
+            ->unique('part_stock_id')
+            ->filter(fn (StockLedger $entry) => $entry->type === StockLedger::TYPE_RECEIVING)
+            ->pluck('id', 'part_stock_id');
+
+        $entries->each(function (StockLedger $entry) use ($latestEditableIds) {
+            $entry->is_editable = $latestEditableIds->get($entry->part_stock_id) === $entry->id;
+        });
+
         return StockLedgerReportResource::collection($entries);
     }
 

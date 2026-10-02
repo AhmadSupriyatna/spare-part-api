@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Http\Requests;
+
+use App\Models\Supplier;
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
+
+class UpdateStockLedgerReceivingRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        return [
+            'quantity' => ['required', 'integer', 'min:1'],
+            'total_price' => ['required', 'numeric', 'min:0'],
+            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
+            'notes' => ['nullable', 'string'],
+            'occurred_at' => ['nullable', 'date', 'before_or_equal:today'],
+        ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $supplierId = $this->input('supplier_id');
+            $stockLedger = $this->route('stockLedger');
+
+            if ($supplierId && $stockLedger) {
+                $belongsToSameBranch = Supplier::where('id', $supplierId)
+                    ->where('branch_id', $stockLedger->partStock->branch_id)
+                    ->exists();
+
+                if (! $belongsToSameBranch) {
+                    $validator->errors()->add('supplier_id', 'Supplier tersebut bukan milik plant yang sama dengan stok ini.');
+                }
+            }
+        });
+    }
+}

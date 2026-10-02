@@ -46,6 +46,11 @@ class StockLedgerReportResource extends JsonResource
             'line_id' => $equipment?->machine?->line_id,
             'line_name' => $equipment?->machine?->line?->name,
             'equipment_name' => $equipment?->name,
+            // Set by PartStockController::branchLedger() — true only for the
+            // single most recent receiving entry of its part_stock (see
+            // StockLedgerController's own docblock for why edit/delete is
+            // restricted to that one row).
+            'is_editable' => (bool) ($this->is_editable ?? false),
         ];
     }
 
