@@ -4,10 +4,11 @@ namespace Database\Factories;
 
 use App\Enums\ScheduleType;
 use App\Models\Equipment;
+use App\Models\WorkOrder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<\App\Models\WorkOrder>
+ * @extends Factory<WorkOrder>
  */
 class WorkOrderFactory extends Factory
 {

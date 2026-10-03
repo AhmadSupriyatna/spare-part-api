@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\PartUnit;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,7 +11,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * technician what they scanned and where it currently is, without exposing
  * its full internal repair/installation history.
  *
- * @mixin \App\Models\PartUnit
+ * @mixin PartUnit
  */
 class PublicPartUnitResource extends JsonResource
 {

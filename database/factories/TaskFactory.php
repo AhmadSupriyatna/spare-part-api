@@ -4,10 +4,11 @@ namespace Database\Factories;
 
 use App\Enums\TaskStatus;
 use App\Models\Equipment;
+use App\Models\Task;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<\App\Models\Task>
+ * @extends Factory<Task>
  */
 class TaskFactory extends Factory
 {

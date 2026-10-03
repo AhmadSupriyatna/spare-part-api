@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\WorkOrder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\WorkOrder
+ * @mixin WorkOrder
  */
 class WorkOrderResource extends JsonResource
 {

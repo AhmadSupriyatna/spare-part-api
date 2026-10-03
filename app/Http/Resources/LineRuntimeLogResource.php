@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\LineRuntimeLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\LineRuntimeLog
+ * @mixin LineRuntimeLog
  */
 class LineRuntimeLogResource extends JsonResource
 {
