@@ -199,11 +199,10 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     Route::post('/fp3-requests/{fp3Request}/complete', [Fp3RequestController::class, 'complete']);
     Route::post('/fp3-requests/{fp3Request}/cancel', [Fp3RequestController::class, 'cancel']);
 
-    // Master data & inventory: Admin Spare Part is the broadest role day to
-    // day, but confined to their own branch by branch.access above; only
-    // Superadmin can act outside it. Supervisor is deliberately absent here
-    // — oversight (approve + view everywhere) but no master-data CRUD.
-    Route::middleware('role:admin_spare_part|superadmin')->group(function () {
+    // Master data & inventory: Admin Spare Part and Supervisor both get full
+    // CRUD here, confined to their own branch by branch.access above; only
+    // Superadmin can act outside it.
+    Route::middleware('role:admin_spare_part|supervisor|superadmin')->group(function () {
         Route::apiResource('branches', BranchController::class)->only(['store', 'update']);
         Route::apiResource('parts', PartController::class)->only(['store', 'update', 'destroy']);
         Route::post('/units', [UnitController::class, 'store']);
