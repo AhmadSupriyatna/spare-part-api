@@ -840,4 +840,70 @@ class DashboardAnalyticsTest extends TestCase
 
         $this->assertNotContains($lastYear, $years);
     }
+
+    public function test_monthly_cost_by_line_groups_spend_by_month_and_line(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'name' => 'Line A']);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+        $task = Task::factory()->create(['equipment_id' => $equipment->id]);
+
+        StockLedger::create([
+            'part_stock_id' => $stock->id,
+            'type' => StockLedger::TYPE_ISSUE,
+            'quantity_change' => -2,
+            'balance_after' => 8,
+            'unit_cost' => '30000.00',
+            'reference_type' => Task::class,
+            'reference_id' => $task->id,
+            'occurred_at' => now(),
+        ]);
+
+        $rows = collect($this->fetchAnalytics()->json('data.monthly_cost_by_line'));
+        $row = $rows->firstWhere('line_name', 'Line A');
+
+        $this->assertNotNull($row);
+        $this->assertSame(now()->format('Y-m'), $row['month']);
+        $this->assertSame('60000.00', $row['cost']);
+    }
+
+    public function test_monthly_cost_by_pm_failure_splits_by_month_and_reference_type(): void
+    {
+        $equipment = Equipment::factory()->create();
+        $library = TaskLibrary::create([
+            'equipment_id' => $equipment->id,
+            'code' => 'TL-1',
+            'title' => 'Cek Rutin',
+            'is_active' => true,
+        ]);
+        $pmTask = Task::factory()->create(['equipment_id' => $equipment->id, 'task_library_id' => $library->id]);
+        $breakdownTask = Task::factory()->create(['equipment_id' => $equipment->id]);
+
+        $part = Part::factory()->create();
+        $stock = PartStock::factory()->create(['part_id' => $part->id, 'branch_id' => $this->branch->id]);
+
+        $makeLedger = function (string $referenceType, int $referenceId, string $unitCost) use ($stock) {
+            StockLedger::create([
+                'part_stock_id' => $stock->id,
+                'type' => StockLedger::TYPE_ISSUE,
+                'quantity_change' => -1,
+                'balance_after' => 9,
+                'unit_cost' => $unitCost,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+                'occurred_at' => now(),
+            ]);
+        };
+
+        $makeLedger(Task::class, $pmTask->id, '15000.00');
+        $makeLedger(Task::class, $breakdownTask->id, '8000.00');
+
+        $rows = collect($this->fetchAnalytics()->json('data.monthly_cost_by_pm_failure'))->keyBy('month');
+        $thisMonth = $rows[now()->format('Y-m')];
+
+        $this->assertSame('15000.00', $thisMonth['pm_cost']);
+        $this->assertSame('8000.00', $thisMonth['failure_cost']);
+    }
 }

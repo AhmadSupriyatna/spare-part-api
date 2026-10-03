@@ -77,6 +77,8 @@ class DashboardAnalyticsController extends Controller
             'installation_sunburst' => $this->installationSunburst($branch),
             'cost_sunburst' => $this->costSunburst($branch, $year),
             'scheduled_vs_failure_trend' => $this->scheduledVsFailureTrend($branch, $year),
+            'monthly_cost_by_line' => $this->monthlyCostByLine($branch, $year),
+            'monthly_cost_by_pm_failure' => $this->monthlyCostByPmFailure($branch, $year),
         ]]);
     }
 
@@ -786,5 +788,101 @@ class DashboardAnalyticsController extends Controller
         );
 
         return $years->unique()->sortDesc()->values()->all();
+    }
+
+    /**
+     * "Tren Biaya Bulanan" stacked-by-Line mode — same actual-spend source
+     * and reference-resolution as costHeatmap(), scoped to `$year`, grouped
+     * by month then Line instead of Line then Machine. Kept flat (one row
+     * per month+line leaf) rather than pre-pivoted, so the frontend builds
+     * whichever stacked bars it needs and can color lines consistently with
+     * other charts.
+     *
+     * @return list<array{month: string, line_name: string, cost: string}>
+     */
+    private function monthlyCostByLine(Branch $branch, int $year): array
+    {
+        $entries = StockLedger::query()
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->whereYear('occurred_at', $year)
+            ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereNotNull('unit_cost')
+            ->with([
+                'reference' => fn ($morphTo) => $morphTo->morphWith([
+                    Task::class => ['equipment.machine.line'],
+                    PartReplacementRequest::class => ['equipment.machine.line'],
+                ]),
+            ])
+            ->get(['id', 'occurred_at', 'quantity_change', 'unit_cost', 'reference_type', 'reference_id']);
+
+        return $entries
+            ->filter(fn (StockLedger $entry) => $entry->reference?->equipment !== null)
+            ->groupBy(fn (StockLedger $entry) => $entry->occurred_at->format('Y-m').'|'.($entry->reference->equipment->machine?->line?->name ?? 'Luar Line'))
+            ->map(function (Collection $group) {
+                /** @var StockLedger $first */
+                $first = $group->first();
+                $cost = $group->reduce(
+                    fn (string $carry, StockLedger $entry) => bcadd($carry, bcmul((string) $entry->unit_cost, (string) abs($entry->quantity_change), 2), 2),
+                    '0.00'
+                );
+
+                return [
+                    'month' => $first->occurred_at->format('Y-m'),
+                    'line_name' => $first->reference->equipment->machine?->line?->name ?? 'Luar Line',
+                    'cost' => $cost,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * "Tren Biaya Bulanan" stacked-by-PM/Failure mode — same classification
+     * rule as pmVsFailureCost(), scoped to `$year`, grouped by month instead
+     * of a single running total. Fixed two-category shape (unlike
+     * monthlyCostByLine()'s flexible line list) since PM vs Failure is
+     * always exactly these two buckets.
+     *
+     * @return list<array{month: string, pm_cost: string, failure_cost: string}>
+     */
+    private function monthlyCostByPmFailure(Branch $branch, int $year): array
+    {
+        $months = $this->monthsOfYear($year);
+
+        $entries = StockLedger::query()
+            ->where('type', StockLedger::TYPE_ISSUE)
+            ->whereYear('occurred_at', $year)
+            ->whereHas('partStock', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereNotNull('unit_cost')
+            ->with(['reference' => fn ($morphTo) => $morphTo->morphWith([
+                Task::class => ['partChecks'],
+            ])])
+            ->get(['id', 'occurred_at', 'quantity_change', 'unit_cost', 'reference_type', 'reference_id']);
+
+        $pmByMonth = [];
+        $failureByMonth = [];
+
+        foreach ($entries as $entry) {
+            if ($entry->reference === null) {
+                continue;
+            }
+
+            $month = $entry->occurred_at->format('Y-m');
+            $cost = bcmul((string) $entry->unit_cost, (string) abs($entry->quantity_change), 2);
+            $isPm = $entry->reference instanceof Task
+                && ($entry->reference->task_library_id !== null || $entry->reference->partChecks->isNotEmpty());
+
+            if ($isPm) {
+                $pmByMonth[$month] = bcadd($pmByMonth[$month] ?? '0.00', $cost, 2);
+            } else {
+                $failureByMonth[$month] = bcadd($failureByMonth[$month] ?? '0.00', $cost, 2);
+            }
+        }
+
+        return $months->map(fn ($month) => [
+            'month' => $month,
+            'pm_cost' => $pmByMonth[$month] ?? '0.00',
+            'failure_cost' => $failureByMonth[$month] ?? '0.00',
+        ])->values()->all();
     }
 }
