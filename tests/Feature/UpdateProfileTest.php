@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -72,5 +74,19 @@ class UpdateProfileTest extends TestCase
 
         $response->assertOk();
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
+    }
+
+    public function test_a_user_can_change_their_own_avatar(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->put('/api/user', [
+            'avatar' => UploadedFile::fake()->image('foto.jpg'),
+        ]);
+
+        $response->assertOk();
+        $this->assertNotNull($user->fresh()->avatar_path);
+        $this->assertNotNull($response->json('avatar_url'));
     }
 }

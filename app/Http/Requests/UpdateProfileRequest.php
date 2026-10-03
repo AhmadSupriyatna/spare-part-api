@@ -30,6 +30,7 @@ class UpdateProfileRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'current_password' => ['required_with:password', 'current_password'],
             'password' => ['nullable', Password::min(8)],
+            'avatar' => ['nullable', 'image', 'max:5120'],
         ];
     }
 }

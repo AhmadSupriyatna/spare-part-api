@@ -8,6 +8,7 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Models\Branch;
 use App\Models\User;
+use App\Services\UserAvatarService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly UserAvatarService $avatars) {}
+
     public function login(LoginRequest $request): JsonResponse
     {
         $credentials = $request->validated();
@@ -69,6 +72,11 @@ class AuthController extends Controller
         }
 
         $user->update($updates);
+
+        if ($request->hasFile('avatar')) {
+            $this->avatars->delete($user->avatar_path);
+            $user->update(['avatar_path' => $this->avatars->store($request->file('avatar'))]);
+        }
 
         return response()->json($this->transformUser($user));
     }
