@@ -25,7 +25,6 @@ class MachineResource extends JsonResource
             'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
             'code' => $this->code,
             'name' => $this->name,
-            'category' => $this->category,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

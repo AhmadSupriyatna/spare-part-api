@@ -32,6 +32,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
 
 class PartStockController extends Controller
 {
@@ -484,6 +485,29 @@ class PartStockController extends Controller
         // narrowing (a date-range filter must never make an older row look
         // editable just because newer rows fell outside the window).
         $partStockIds = $entries->pluck('part_stock_id')->unique()->values();
+        $openingBalances = [];
+        if ($request->filled('from') && $partStockIds->isNotEmpty()) {
+            $openingAt = Date::parse($request->string('from'))->startOfDay();
+            $openingBalances = DB::table('stock_ledger as ledger')
+                ->whereIn('ledger.part_stock_id', $partStockIds)
+                ->where('ledger.occurred_at', '<', $openingAt)
+                ->whereNotExists(function ($query) use ($openingAt) {
+                    $query->selectRaw('1')
+                        ->from('stock_ledger as later')
+                        ->whereColumn('later.part_stock_id', 'ledger.part_stock_id')
+                        ->where('later.occurred_at', '<', $openingAt)
+                        ->where(function ($query) {
+                            $query->whereColumn('later.occurred_at', '>', 'ledger.occurred_at')
+                                ->orWhere(function ($query) {
+                                    $query->whereColumn('later.occurred_at', 'ledger.occurred_at')
+                                        ->whereColumn('later.id', '>', 'ledger.id');
+                                });
+                        });
+                })
+                ->pluck('ledger.balance_after', 'ledger.part_stock_id')
+                ->all();
+        }
+
         $latestEditableIds = StockLedger::whereIn('part_stock_id', $partStockIds)
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
@@ -492,8 +516,9 @@ class PartStockController extends Controller
             ->filter(fn (StockLedger $entry) => $entry->type === StockLedger::TYPE_RECEIVING)
             ->pluck('id', 'part_stock_id');
 
-        $entries->each(function (StockLedger $entry) use ($latestEditableIds) {
+        $entries->each(function (StockLedger $entry) use ($latestEditableIds, $openingBalances) {
             $entry->is_editable = $latestEditableIds->get($entry->part_stock_id) === $entry->id;
+            $entry->opening_balance = (int) ($openingBalances[$entry->part_stock_id] ?? 0);
         });
 
         return StockLedgerReportResource::collection($entries);

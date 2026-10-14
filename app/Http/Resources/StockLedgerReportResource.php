@@ -39,6 +39,7 @@ class StockLedgerReportResource extends JsonResource
             'channel' => $this->channelLabel(),
             'quantity_change' => $this->quantity_change,
             'balance_after' => $this->balance_after,
+            'opening_balance' => (int) ($this->opening_balance ?? 0),
             'unit_cost' => $this->unit_cost,
             'total_cost' => $this->unit_cost !== null ? bcmul((string) $this->unit_cost, (string) abs($this->quantity_change), 2) : null,
             'notes' => $this->notes,

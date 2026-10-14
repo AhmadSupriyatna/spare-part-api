@@ -51,10 +51,10 @@ class TaskService
      * — see completeChecklist(). `finding` is entirely optional and
      * independent of is_replaced (see completeChecklist()'s own docblock).
      *
-     * $checklistItems is independent of $checks — a task can carry both (or,
-     * for a checklist-only Task Library with no parts, just this): one entry
-     * per condition-check item — `{id, condition_ok, notes?}` — see
-     * completeChecklistItems().
+     * $checklistItems is a separate payload from $checks, but part-check
+     * rows may reference these conditions to determine whether replacement
+     * is needed: one entry per condition-check item — `{id, condition_ok,
+     * notes?}` — see completeChecklistItems().
      *
      * @param  array<int, array{id: int, part_id: int, is_replaced: bool, quantity_used?: ?int, reason?: ?string, part_unit_id?: ?int, old_installation_id?: ?int, finding?: ?array{description: string, result: string, severity?: ?string, recommendation?: ?string}}>|null  $checks
      * @param  array<int, array{id: int, condition_ok: bool, notes?: ?string}>|null  $checklistItems

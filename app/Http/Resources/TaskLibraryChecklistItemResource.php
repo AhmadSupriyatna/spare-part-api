@@ -20,6 +20,7 @@ class TaskLibraryChecklistItemResource extends JsonResource
             'id' => $this->id,
             'description' => $this->description,
             'order' => $this->order,
+            'parts' => TaskLibraryPartResource::collection($this->whenLoaded('parts')),
         ];
     }
 }

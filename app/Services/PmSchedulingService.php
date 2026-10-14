@@ -41,6 +41,15 @@ class PmSchedulingService
                 'due_date' => $dueDate,
             ]);
 
+            $taskChecklistItemsByLibraryItemId = [];
+            foreach ($library->checklistItems as $libraryItem) {
+                $taskChecklistItemsByLibraryItemId[$libraryItem->id] = TaskChecklistItem::create([
+                    'task_id' => $task->id,
+                    'task_library_checklist_item_id' => $libraryItem->id,
+                    'description' => $libraryItem->description,
+                ]);
+            }
+
             // One row per planned unit, not one row per part — "satu baris
             // satu alamat": a checklist row is what the technician picks an
             // A/B/C installation for when replacing it (see
@@ -48,23 +57,18 @@ class PmSchedulingService
             // in quantity 3 needs 3 independently-completable rows, each
             // able to point at a different installation.
             foreach ($library->parts as $libraryPart) {
+                $taskChecklistItemId = $libraryPart->task_library_checklist_item_id === null
+                    ? null
+                    : ($taskChecklistItemsByLibraryItemId[$libraryPart->task_library_checklist_item_id]->id ?? null);
+
                 for ($i = 0; $i < $libraryPart->quantity_required; $i++) {
                     TaskPartCheck::create([
                         'task_id' => $task->id,
+                        'task_checklist_item_id' => $taskChecklistItemId,
                         'part_id' => $libraryPart->part_id,
                         'quantity_planned' => 1,
                     ]);
                 }
-            }
-
-            // Condition-check items (Kondisi Baik/Tidak), snapshotted the
-            // same way — independent of the part checklist above.
-            foreach ($library->checklistItems as $libraryItem) {
-                TaskChecklistItem::create([
-                    'task_id' => $task->id,
-                    'task_library_checklist_item_id' => $libraryItem->id,
-                    'description' => $libraryItem->description,
-                ]);
             }
 
             return $task;

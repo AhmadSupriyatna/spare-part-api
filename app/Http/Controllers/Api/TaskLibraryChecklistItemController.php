@@ -18,7 +18,7 @@ class TaskLibraryChecklistItemController extends Controller
 
         $item = $taskLibrary->checklistItems()->create($data);
 
-        return new TaskLibraryChecklistItemResource($item);
+        return new TaskLibraryChecklistItemResource($item->load('parts.part'));
     }
 
     public function destroy(TaskLibraryChecklistItem $taskLibraryChecklistItem): Response

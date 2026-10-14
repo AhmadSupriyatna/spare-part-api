@@ -88,6 +88,7 @@ class MachineController extends Controller
             'machine' => new MachineResource($machine),
             'equipment_count' => $data['equipment_count'],
             'upcoming_tasks' => TaskResource::collection($data['upcoming_tasks']),
+            'upcoming_task_count' => $data['upcoming_task_count'],
             'overdue_task_count' => $data['overdue_task_count'],
             'installations' => PartInstallationResource::collection($data['installations']),
             'monthly_failure_trend' => $data['monthly_failure_trend'],
@@ -99,6 +100,9 @@ class MachineController extends Controller
             'passport_install_history' => $data['passport_install_history'],
             'installed_part_value' => $data['installed_part_value'],
             'cost_by_equipment_this_year' => $data['cost_by_equipment_this_year'],
+            'top_parts_consumed_this_year' => $data['top_parts_consumed_this_year'],
+            'lifetime_hours_sample_count' => $data['lifetime_hours_sample_count'],
+            'lifetime_hours_total' => $data['lifetime_hours_total'],
         ]]);
     }
 

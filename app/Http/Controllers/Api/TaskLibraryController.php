@@ -23,7 +23,7 @@ class TaskLibraryController extends Controller
     public function index(Equipment $equipment): AnonymousResourceCollection
     {
         return TaskLibraryResource::collection(
-            $equipment->taskLibraries()->with(['equipment.machine.line', 'parts.part', 'checklistItems'])->orderBy('id')->get()
+            $equipment->taskLibraries()->with(['equipment.machine.line', 'parts.part', 'checklistItems.parts.part'])->orderBy('id')->get()
         );
     }
 
@@ -37,7 +37,7 @@ class TaskLibraryController extends Controller
         return TaskLibraryResource::collection(
             TaskLibrary::whereHas('equipment.machine.line', fn ($q) => $q->where('branch_id', $branch->id))
                 ->where('is_active', true)
-                ->with(['equipment.machine.line', 'parts.part', 'checklistItems'])
+                ->with(['equipment.machine.line', 'parts.part', 'checklistItems.parts.part'])
                 ->orderBy('id')
                 ->get()
         );
@@ -77,28 +77,35 @@ class TaskLibraryController extends Controller
             }
 
             foreach ($checklistItemsData as $order => $itemData) {
-                $library->checklistItems()->create([
+                $checklistItem = $library->checklistItems()->create([
                     'description' => $itemData['description'],
                     'order' => $order,
                 ]);
+                foreach ($itemData['parts'] ?? [] as $partData) {
+                    $checklistItem->parts()->create([
+                        'task_library_id' => $library->id,
+                        'part_id' => $partData['part_id'],
+                        'quantity_required' => $equipment->activeInstallationCountForPart($partData['part_id']),
+                    ]);
+                }
             }
 
             return $library;
         });
 
-        return new TaskLibraryResource($library->load(['equipment.machine.line', 'parts.part', 'checklistItems']));
+        return new TaskLibraryResource($library->load(['equipment.machine.line', 'parts.part', 'checklistItems.parts.part']));
     }
 
     public function show(TaskLibrary $taskLibrary): TaskLibraryResource
     {
-        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part', 'checklistItems']));
+        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part', 'checklistItems.parts.part']));
     }
 
     public function update(UpdateTaskLibraryRequest $request, TaskLibrary $taskLibrary): TaskLibraryResource
     {
         $taskLibrary->update($request->validated());
 
-        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part', 'checklistItems']));
+        return new TaskLibraryResource($taskLibrary->load(['equipment.machine.line', 'parts.part', 'checklistItems.parts.part']));
     }
 
     public function destroy(TaskLibrary $taskLibrary): Response

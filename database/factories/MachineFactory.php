@@ -22,7 +22,6 @@ class MachineFactory extends Factory
             'line_id' => ProductionLine::factory(),
             'code' => 'MC-'.$this->faker->unique()->numberBetween(1, 999),
             'name' => $this->faker->randomElement(['Mesin Press', 'Mesin Cetak', 'Conveyor', 'Mesin Bubut', 'Mesin CNC']),
-            'category' => $this->faker->randomElement(['Produksi', 'Pengemasan', 'Material Handling']),
             'is_active' => true,
         ];
     }

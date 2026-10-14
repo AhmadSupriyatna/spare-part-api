@@ -95,6 +95,33 @@ class TaskLibraryPartQuantityTest extends TestCase
         $this->assertSame(2, $response->json('data.quantity_required'));
     }
 
+    public function test_an_existing_unassigned_part_can_be_moved_under_a_condition_check(): void
+    {
+        $part = Part::factory()->create();
+        $this->installPart($part);
+        $library = TaskLibrary::create([
+            'equipment_id' => $this->equipment->id,
+            'title' => 'PM Mingguan',
+            'code' => 'TL-1',
+            'is_active' => true,
+        ]);
+        $condition = $library->checklistItems()->create(['description' => 'Periksa kebocoran']);
+        $libraryPart = $library->parts()->create([
+            'part_id' => $part->id,
+            'quantity_required' => 1,
+        ]);
+
+        $response = $this->actingAs($this->admin)->putJson("/api/task-library-parts/{$libraryPart->id}", [
+            'task_library_checklist_item_id' => $condition->id,
+        ]);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('task_library_parts', [
+            'id' => $libraryPart->id,
+            'task_library_checklist_item_id' => $condition->id,
+        ]);
+    }
+
     public function test_creating_a_library_with_bundled_parts_uses_the_active_installation_count(): void
     {
         $partA = Part::factory()->create();

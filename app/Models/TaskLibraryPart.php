@@ -9,6 +9,7 @@ class TaskLibraryPart extends Model
 {
     protected $fillable = [
         'task_library_id',
+        'task_library_checklist_item_id',
         'part_id',
         'quantity_required',
         'notes',
@@ -24,6 +25,11 @@ class TaskLibraryPart extends Model
     public function taskLibrary(): BelongsTo
     {
         return $this->belongsTo(TaskLibrary::class);
+    }
+
+    public function checklistItem(): BelongsTo
+    {
+        return $this->belongsTo(TaskLibraryChecklistItem::class, 'task_library_checklist_item_id');
     }
 
     public function part(): BelongsTo

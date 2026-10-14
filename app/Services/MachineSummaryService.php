@@ -11,6 +11,7 @@ use App\Models\PartReplacementRequest;
 use App\Models\PartStock;
 use App\Models\StockLedger;
 use App\Models\Task;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -37,6 +38,28 @@ class MachineSummaryService
             ->orderBy('due_date')
             ->limit(20)
             ->get();
+
+        $scheduledTaskCount = $includeCost
+            ? Task::query()
+                ->whereIn('equipment_id', $equipmentIds)
+                ->whereIn('status', [TaskStatus::Pending, TaskStatus::InProgress])
+                ->count()
+            : $tasks->count();
+
+        if ($includeCost) {
+            $lineRuntimeHours = $machine->line?->runtime_hours ?? 0;
+            $overdueTaskCount = Task::query()
+                ->whereIn('equipment_id', $equipmentIds)
+                ->whereIn('status', [TaskStatus::Pending, TaskStatus::InProgress])
+                ->where(function ($query) use ($lineRuntimeHours) {
+                    $query
+                        ->where(fn ($dueDateQuery) => $dueDateQuery->whereNotNull('due_date')->whereDate('due_date', '<', today()))
+                        ->orWhere(fn ($runtimeQuery) => $runtimeQuery->whereNotNull('due_runtime_hours')->where('due_runtime_hours', '<=', $lineRuntimeHours));
+                })
+                ->count();
+        } else {
+            $overdueTaskCount = $tasks->filter(fn (Task $task) => $task->isOverdue())->count();
+        }
 
         $installations = PartInstallation::query()
             ->whereIn('equipment_id', $equipmentIds)
@@ -74,7 +97,7 @@ class MachineSummaryService
         $data = [
             'equipment_count' => $equipmentIds->count(),
             'upcoming_tasks' => $tasks,
-            'overdue_task_count' => $tasks->filter(fn (Task $task) => $task->isOverdue())->count(),
+            'overdue_task_count' => $overdueTaskCount,
             'installations' => $installations,
             'monthly_failure_trend' => $monthlyFailureTrend,
             'average_lifetime_hours' => $lifetimeHours->isEmpty() ? null : (int) round($lifetimeHours->avg()),
@@ -94,8 +117,13 @@ class MachineSummaryService
         ];
 
         if ($includeCost) {
+            $yearIssueEntries = $this->issueEntriesForMachine($machine, $equipmentIds, now()->startOfYear());
             $data['installed_part_value'] = $this->installedPartValue($machine, $installations);
             $data['cost_by_equipment_this_year'] = $this->costByEquipmentThisYear($equipmentIds);
+            $data['top_parts_consumed_this_year'] = $this->topPartsConsumed($yearIssueEntries, includeCost: true, limit: null);
+            $data['upcoming_task_count'] = $scheduledTaskCount;
+            $data['lifetime_hours_sample_count'] = $lifetimeHours->count();
+            $data['lifetime_hours_total'] = $lifetimeHours->sum();
         }
 
         return $data;
@@ -111,11 +139,11 @@ class MachineSummaryService
      * @param  Collection<int, int>  $equipmentIds
      * @return Collection<int, StockLedger>
      */
-    private function issueEntriesForMachine(Machine $machine, Collection $equipmentIds): Collection
+    private function issueEntriesForMachine(Machine $machine, Collection $equipmentIds, ?Carbon $from = null): Collection
     {
         return StockLedger::query()
             ->where('type', StockLedger::TYPE_ISSUE)
-            ->where('occurred_at', '>=', now()->startOfMonth()->subMonths(11))
+            ->where('occurred_at', '>=', $from ?? now()->startOfMonth()->subMonths(11))
             ->with([
                 'partStock.part',
                 'reference' => fn ($morphTo) => $morphTo->morphWith([
@@ -158,9 +186,9 @@ class MachineSummaryService
      * @param  Collection<int, StockLedger>  $entries
      * @return list<array{part_id: int, part_name: string, item_master_no: string, quantity: int, cost?: string}>
      */
-    private function topPartsConsumed(Collection $entries, bool $includeCost, int $limit = 5): array
+    private function topPartsConsumed(Collection $entries, bool $includeCost, ?int $limit = 5): array
     {
-        return $entries
+        $parts = $entries
             ->filter(fn (StockLedger $entry) => $entry->partStock?->part !== null)
             ->groupBy(fn (StockLedger $entry) => $entry->partStock->part_id)
             ->map(function (Collection $group) use ($includeCost) {
@@ -183,9 +211,9 @@ class MachineSummaryService
                 return $row;
             })
             ->sortByDesc('quantity')
-            ->take($limit)
-            ->values()
-            ->all();
+            ->values();
+
+        return ($limit === null ? $parts : $parts->take($limit))->all();
     }
 
     /**

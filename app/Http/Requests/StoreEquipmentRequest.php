@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreEquipmentRequest extends FormRequest
 {
@@ -28,7 +29,7 @@ class StoreEquipmentRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'category' => ['nullable', 'string', 'max:100'],
+            'category' => ['nullable', 'string', Rule::exists('asset_categories', 'name')->where('type', 'equipment')],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

@@ -141,6 +141,71 @@ class MachineSummaryTest extends TestCase
         $this->assertSame('30000.00', $row['cost']);
     }
 
+    public function test_summary_includes_complete_asset_report_aggregates(): void
+    {
+        $line = ProductionLine::factory()->create(['runtime_hours' => 1000]);
+        $branch = $line->branch;
+        $this->admin->branches()->attach($branch->id);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $part = Part::factory()->create(['name' => 'Seal']);
+        $stock = PartStock::factory()->create([
+            'part_id' => $part->id,
+            'branch_id' => $branch->id,
+            'unit_cost' => '500.00',
+        ]);
+
+        Task::factory()->count(21)->create([
+            'equipment_id' => $equipment->id,
+            'due_date' => now()->addDay(),
+            'due_runtime_hours' => null,
+        ]);
+        $dateOverdueTask = Task::factory()->create([
+            'equipment_id' => $equipment->id,
+            'due_date' => now()->subDay(),
+            'due_runtime_hours' => null,
+        ]);
+        $runtimeOverdueTask = Task::factory()->create([
+            'equipment_id' => $equipment->id,
+            'due_date' => now()->addDay(),
+            'due_runtime_hours' => 900,
+        ]);
+
+        PartInstallation::create([
+            'equipment_id' => $equipment->id,
+            'part_id' => $part->id,
+            'installed_at_runtime_hours' => 800,
+        ]);
+
+        foreach ([
+            [$dateOverdueTask, -2, now()],
+            [$runtimeOverdueTask, -99, now()->subYear()],
+        ] as [$task, $quantity, $occurredAt]) {
+            StockLedger::create([
+                'part_stock_id' => $stock->id,
+                'type' => StockLedger::TYPE_ISSUE,
+                'quantity_change' => $quantity,
+                'balance_after' => 10 + $quantity,
+                'unit_cost' => '40000.00',
+                'reference_type' => Task::class,
+                'reference_id' => $task->id,
+                'occurred_at' => $occurredAt,
+            ]);
+        }
+
+        $response = $this->actingAs($this->admin)->getJson("/api/machines/{$machine->id}/summary");
+
+        $response->assertOk()
+            ->assertJsonPath('data.upcoming_task_count', 23)
+            ->assertJsonPath('data.overdue_task_count', 2)
+            ->assertJsonPath('data.equipment_count', 1)
+            ->assertJsonPath('data.lifetime_hours_sample_count', 1)
+            ->assertJsonPath('data.lifetime_hours_total', 200)
+            ->assertJsonPath('data.top_parts_consumed_this_year.0.part_name', 'Seal')
+            ->assertJsonPath('data.top_parts_consumed_this_year.0.quantity', 2)
+            ->assertJsonPath('data.top_parts_consumed_this_year.0.cost', '80000.00');
+    }
+
     public function test_summary_includes_historical_part_lifetime_from_completed_installations_only(): void
     {
         $line = ProductionLine::factory()->create();

@@ -7,20 +7,22 @@ use App\Enums\UserRole;
 use App\Models\Branch;
 use App\Models\Equipment;
 use App\Models\Machine;
+use App\Models\Part;
+use App\Models\PartInstallation;
 use App\Models\ProductionLine;
 use App\Models\Task;
 use App\Models\TaskChecklistItem;
 use App\Models\TaskLibrary;
+use App\Models\TaskPartCheck;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Generic condition-check items (Kondisi Baik/Tidak) on a Task Library,
- * independent of the part-replacement checklist — see
- * TaskLibraryChecklistItem's docblock. Covers the recipe CRUD, the
- * snapshot-onto-Task step (PmSchedulingService::schedule()), completion
+ * Condition-check items (Kondisi Baik/Tidak) and their related parts on a
+ * Task Library. Covers recipe creation, snapshot-onto-Task
+ * (PmSchedulingService::schedule()), completion
  * (TaskService::completeChecklistItems()), and the Machine-scoped weekly
  * grouping read used by "Cetak Checklist Mingguan".
  */
@@ -128,6 +130,49 @@ class TaskChecklistItemTest extends TestCase
         $descriptions = TaskChecklistItem::where('task_id', $taskId)->pluck('description');
         $this->assertTrue($descriptions->contains('Periksa kebocoran'));
         $this->assertTrue($descriptions->contains('Cek fungsional Fan'));
+    }
+
+    public function test_library_parts_are_nested_under_a_condition_and_keep_that_link_when_scheduled(): void
+    {
+        $part = Part::factory()->create();
+        PartInstallation::create(['equipment_id' => $this->equipment->id, 'part_id' => $part->id]);
+
+        $libraryResponse = $this->actingAs($this->admin)->postJson(
+            "/api/equipment/{$this->equipment->id}/task-libraries",
+            [
+                'title' => 'PM Mingguan',
+                'checklist_items' => [
+                    [
+                        'description' => 'Periksa kebocoran',
+                        'parts' => [['part_id' => $part->id]],
+                    ],
+                ],
+            ]
+        );
+
+        $libraryResponse->assertCreated();
+        $libraryChecklistItemId = $libraryResponse->json('data.checklist_items.0.id');
+        $this->assertSame(
+            $libraryChecklistItemId,
+            $libraryResponse->json('data.checklist_items.0.parts.0.task_library_checklist_item_id')
+        );
+
+        $libraryId = $libraryResponse->json('data.id');
+        $taskId = $this->actingAs($this->admin)->postJson(
+            "/api/task-libraries/{$libraryId}/schedule",
+            ['due_date' => now()->addWeek()->toDateString()]
+        )->assertCreated()->json('data.id');
+
+        $taskChecklistItemId = TaskChecklistItem::where('task_id', $taskId)->value('id');
+        $this->assertDatabaseHas('task_part_checks', [
+            'task_id' => $taskId,
+            'task_checklist_item_id' => $taskChecklistItemId,
+            'part_id' => $part->id,
+        ]);
+        $this->assertSame(
+            $taskChecklistItemId,
+            TaskPartCheck::where('task_id', $taskId)->value('task_checklist_item_id')
+        );
     }
 
     public function test_completing_a_task_persists_condition_ok_and_notes_per_item(): void

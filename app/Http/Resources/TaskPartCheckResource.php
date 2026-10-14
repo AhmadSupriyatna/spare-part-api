@@ -18,6 +18,7 @@ class TaskPartCheckResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'task_checklist_item_id' => $this->task_checklist_item_id,
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),

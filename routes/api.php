@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\AssetCategoryController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\BudgetController;
@@ -87,10 +88,11 @@ Route::middleware('throttle:breakdown-public')->prefix('public')->group(function
 // bound models don't resolve to a branch at all (global lists like
 // GET /parts, GET /tasks/mine) — safe to apply blanket-wide rather than
 // threading it into each sub-group below.
-Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(function () {
+Route::middleware(['auth:sanctum', 'user.active', 'track.activity', 'branch.access'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'me']);
     Route::put('/user', [AuthController::class, 'updateProfile']);
+    Route::get('/asset-categories', [AssetCategoryController::class, 'index']);
     Route::get('/search', [SearchController::class, 'index']);
 
     // Master data: any authenticated role can read.
@@ -281,6 +283,7 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
         Route::put('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'update']);
         Route::delete('/task-libraries/{taskLibrary}', [TaskLibraryController::class, 'destroy']);
         Route::post('/task-libraries/{taskLibrary}/parts', [TaskLibraryPartController::class, 'store']);
+        Route::put('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'update']);
         Route::delete('/task-library-parts/{taskLibraryPart}', [TaskLibraryPartController::class, 'destroy']);
         Route::post('/task-libraries/{taskLibrary}/checklist-items', [TaskLibraryChecklistItemController::class, 'store']);
         Route::delete('/task-library-checklist-items/{taskLibraryChecklistItem}', [TaskLibraryChecklistItemController::class, 'destroy']);
@@ -338,6 +341,9 @@ Route::middleware(['auth:sanctum', 'track.activity', 'branch.access'])->group(fu
     // status) is the one thing kept to Superadmin only — narrower than
     // every other "kelola" group above, deliberately.
     Route::middleware('role:superadmin')->group(function () {
+        Route::post('/asset-categories', [AssetCategoryController::class, 'store']);
+        Route::put('/asset-categories/{assetCategory}', [AssetCategoryController::class, 'update']);
+        Route::delete('/asset-categories/{assetCategory}', [AssetCategoryController::class, 'destroy']);
         Route::post('/users', [UserController::class, 'store']);
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::post('/users/{user}/deactivate', [UserController::class, 'deactivate']);

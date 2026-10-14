@@ -18,7 +18,6 @@ class Machine extends Model
         'branch_id',
         'code',
         'name',
-        'category',
         'is_active',
     ];
 

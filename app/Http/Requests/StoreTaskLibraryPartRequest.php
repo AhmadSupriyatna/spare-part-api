@@ -25,6 +25,13 @@ class StoreTaskLibraryPartRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'task_library_checklist_item_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('task_library_checklist_items', 'id')->where(
+                    fn ($q) => $q->where('task_library_id', $this->route('taskLibrary')?->id)
+                ),
+            ],
             'part_id' => [
                 'required', 'integer',
                 Rule::exists('part_installations', 'part_id')->where(

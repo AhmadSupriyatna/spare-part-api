@@ -19,6 +19,7 @@ class TaskLibraryPartResource extends JsonResource
         return [
             'id' => $this->id,
             'task_library_id' => $this->task_library_id,
+            'task_library_checklist_item_id' => $this->task_library_checklist_item_id,
             'part_id' => $this->part_id,
             'part_name' => $this->whenLoaded('part', fn () => $this->part?->name),
             'item_master_no' => $this->whenLoaded('part', fn () => $this->part?->item_master_no),

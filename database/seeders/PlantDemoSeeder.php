@@ -142,7 +142,6 @@ class PlantDemoSeeder extends Seeder
                     'line_id' => $line->id,
                     'code' => Machine::generateCode($machineName, $line->id),
                     'name' => $machineName,
-                    'category' => $this->machineCategory($machineName),
                     'is_active' => true,
                 ]);
 
@@ -181,7 +180,6 @@ class PlantDemoSeeder extends Seeder
                 'branch_id' => $branch->id,
                 'code' => Machine::generateCodeForBranch($machineName, $branch->id),
                 'name' => $machineName,
-                'category' => $this->machineCategory($machineName),
                 'is_active' => true,
             ]);
 
@@ -197,21 +195,6 @@ class PlantDemoSeeder extends Seeder
         }
 
         return $equipmentList;
-    }
-
-    private function machineCategory(string $machineName): string
-    {
-        return match (true) {
-            str_starts_with($machineName, 'Conveyor') => 'Conveyor',
-            $machineName === 'Sterilizer' => 'Sterilizer',
-            $machineName === 'Checkweigher' => 'Checkweigher',
-            $machineName === 'Ink Code' => 'Ink Coder',
-            in_array($machineName, ['Jumbo Reel Truck', 'Hand Lift'], true) => 'Material Handling',
-            $machineName === 'Automatic Scrubbler' => 'Cleaning',
-            in_array($machineName, ['Mesin Bor', 'Gerinda', 'Heat Gun'], true) => 'Peralatan Tangan',
-            str_starts_with($machineName, 'AC ') => 'AC',
-            default => 'Umum',
-        };
     }
 
     /**

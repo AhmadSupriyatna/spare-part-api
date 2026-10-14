@@ -11,6 +11,7 @@ class TaskPartCheck extends Model
 {
     protected $fillable = [
         'task_id',
+        'task_checklist_item_id',
         'part_id',
         'quantity_planned',
         'is_replaced',
@@ -32,6 +33,11 @@ class TaskPartCheck extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    public function checklistItem(): BelongsTo
+    {
+        return $this->belongsTo(TaskChecklistItem::class, 'task_checklist_item_id');
     }
 
     public function part(): BelongsTo

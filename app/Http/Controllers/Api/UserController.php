@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -89,7 +90,10 @@ class UserController extends Controller
     {
         abort_if($request->user()->is($user), 422, 'Tidak bisa menonaktifkan akun sendiri.');
 
-        $user->update(['is_active' => false]);
+        DB::transaction(function () use ($user) {
+            $user->update(['is_active' => false]);
+            $user->tokens()->delete();
+        });
 
         return new UserResource($user->load('branches'));
     }

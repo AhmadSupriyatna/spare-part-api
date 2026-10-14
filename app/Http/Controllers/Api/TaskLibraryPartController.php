@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTaskLibraryPartRequest;
+use App\Http\Requests\UpdateTaskLibraryPartRequest;
 use App\Http\Resources\TaskLibraryPartResource;
 use App\Models\TaskLibrary;
 use App\Models\TaskLibraryPart;
@@ -19,6 +20,13 @@ class TaskLibraryPartController extends Controller
         $part = $taskLibrary->parts()->create($data);
 
         return new TaskLibraryPartResource($part->load('part'));
+    }
+
+    public function update(UpdateTaskLibraryPartRequest $request, TaskLibraryPart $taskLibraryPart): TaskLibraryPartResource
+    {
+        $taskLibraryPart->update($request->validated());
+
+        return new TaskLibraryPartResource($taskLibraryPart->load('part'));
     }
 
     public function destroy(TaskLibraryPart $taskLibraryPart): Response

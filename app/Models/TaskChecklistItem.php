@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaskChecklistItem extends Model
 {
@@ -30,5 +31,10 @@ class TaskChecklistItem extends Model
     public function libraryChecklistItem(): BelongsTo
     {
         return $this->belongsTo(TaskLibraryChecklistItem::class, 'task_library_checklist_item_id');
+    }
+
+    public function partChecks(): HasMany
+    {
+        return $this->hasMany(TaskPartCheck::class);
     }
 }
