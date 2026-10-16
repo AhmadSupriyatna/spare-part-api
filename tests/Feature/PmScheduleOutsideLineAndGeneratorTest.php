@@ -88,6 +88,26 @@ class PmScheduleOutsideLineAndGeneratorTest extends TestCase
 
         $ids = collect($response->json('data'))->pluck('id');
         $this->assertTrue($ids->contains($task->id));
+        $this->assertNull(collect($response->json('data'))->firstWhere('id', $task->id)['line_id']);
+    }
+
+    public function test_pm_tasks_endpoint_includes_line_id_and_code(): void
+    {
+        $line = ProductionLine::factory()->create(['branch_id' => $this->branch->id, 'code' => 'LINE-01']);
+        $machine = Machine::factory()->create(['line_id' => $line->id]);
+        $equipment = Equipment::factory()->create(['machine_id' => $machine->id]);
+        $task = Task::create([
+            'equipment_id' => $equipment->id,
+            'title' => 'WO Line',
+            'status' => TaskStatus::Pending,
+            'due_date' => now()->addDay()->toDateString(),
+        ]);
+
+        $response = $this->actingAs($this->user)->getJson("/api/branches/{$this->branch->id}/pm-tasks")->assertOk();
+        $taskData = collect($response->json('data'))->firstWhere('id', $task->id);
+
+        $this->assertSame($line->id, $taskData['line_id']);
+        $this->assertSame($line->code, $taskData['line_code']);
     }
 
     public function test_generate_pm_schedules_command_only_covers_active_branches(): void
